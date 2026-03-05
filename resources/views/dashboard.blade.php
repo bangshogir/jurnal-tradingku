@@ -25,7 +25,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <div class="flex-shrink-0 text-white font-bold text-xl tracking-tight">
-                            📈 TradingKu Journal
+                            📈 Jurnal Tradingku
                         </div>
                     </div>
                 </div>
