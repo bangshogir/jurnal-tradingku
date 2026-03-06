@@ -32,10 +32,25 @@
             </p>
         </div>
         <div class="relative z-10 flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0">
-            <code
-                class="bg-white/10 px-5 py-3.5 rounded-xl border border-white/20 font-mono text-sm text-white shadow-inner flex-1 select-all backdrop-blur-sm">
-                {{ auth()->user()->webhook_token }}
-            </code>
+            <div
+                class="bg-white/10 px-5 py-3.5 rounded-xl border border-white/20 font-mono text-sm text-white shadow-inner flex-1 flex items-center justify-between backdrop-blur-sm min-w-[280px]">
+                <div>
+                    <span id="token-hidden" class="tracking-widest opacity-80">••••••••••••••••••••••••</span>
+                    <span id="token-visible" class="hidden select-all">{{ auth()->user()->webhook_token }}</span>
+                </div>
+                <button
+                    onclick="document.getElementById('token-hidden').classList.toggle('hidden'); document.getElementById('token-visible').classList.toggle('hidden');"
+                    class="text-white/60 hover:text-white transition-colors ml-4 focus:outline-none"
+                    title="Show/Hide Token">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
             <button
                 onclick="navigator.clipboard.writeText('{{ auth()->user()->webhook_token }}'); alert('Token berhasil disalin!');"
                 class="bg-white hover:bg-slate-50 text-brand-600 px-6 py-3.5 rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2 whitespace-nowrap">
@@ -74,8 +89,9 @@
                 [
                     'label' => 'Total Profit/Loss',
                     'value' => ($totalProfit >= 0 ? '$' : '-$') . number_format(abs($totalProfit), 2),
-                    'change' => '+14%',
-                    'changeColor' => 'text-emerald-500',
+                    'change' => ($todayProfit >= 0 ? '+' : '') . '$' . number_format($todayProfit, 2),
+                    'changeColor' => $todayProfit >= 0 ? 'text-emerald-500' : 'text-red-500',
+                    'subtext' => 'profit today',
                     'icon' =>
                         '<svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
                     'valColor' => $totalProfit >= 0 ? 'text-slate-900' : 'text-red-500',
@@ -83,8 +99,9 @@
                 [
                     'label' => 'Win Rate',
                     'value' => $winRate . '%',
-                    'change' => '+5%',
+                    'change' => '',
                     'changeColor' => 'text-emerald-500',
+                    'subtext' => 'overall',
                     'icon' =>
                         '<svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
                     'valColor' => 'text-slate-900',
@@ -92,8 +109,9 @@
                 [
                     'label' => 'Total Trades',
                     'value' => number_format($totalTrades),
-                    'change' => '-2%',
-                    'changeColor' => 'text-red-500',
+                    'change' => '+' . number_format($todayTradesCount),
+                    'changeColor' => 'text-blue-500',
+                    'subtext' => 'trades today',
                     'icon' =>
                         '<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>',
                     'valColor' => 'text-slate-900',
@@ -101,8 +119,9 @@
                 [
                     'label' => 'Current Balance',
                     'value' => '$' . number_format($currentBalance, 2),
-                    'change' => '+8%',
+                    'change' => '',
                     'changeColor' => 'text-emerald-500',
+                    'subtext' => 'estimated',
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>',
                     'valColor' => 'text-slate-900',
@@ -129,9 +148,11 @@
                     <p class="text-2xl sm:text-3xl font-bold {{ $card['valColor'] }} tracking-tight shadow-sm-text">
                         {{ $card['value'] }}
                     </p>
-                    <p class="text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                        <span class="{{ $card['changeColor'] }}">{{ $card['change'] }}</span>
-                        <span class="text-slate-400">from last month</span>
+                    <p class="text-[11px] font-medium mt-1 flex items-center gap-1.5 min-h-[16px]">
+                        @if ($card['change'])
+                            <span class="{{ $card['changeColor'] }}">{{ $card['change'] }}</span>
+                        @endif
+                        <span class="text-slate-400">{{ $card['subtext'] }}</span>
                     </p>
                 </div>
             </div>

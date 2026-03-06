@@ -112,8 +112,15 @@
                                 d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                         </svg>
                         Open Orders
-                        <span
-                            class="ml-auto text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">2</span>
+                        @php
+                            $openOrdersCount = \App\Models\TradingLog::where('user_id', auth()->id())
+                                ->whereIn('type', ['buy', 'sell'])
+                                ->count();
+                        @endphp
+                        @if ($openOrdersCount > 0)
+                            <span
+                                class="ml-auto text-[10px] font-bold bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">{{ $openOrdersCount }}</span>
+                        @endif
                     </a>
 
                     <a href="{{ route('dashboard.pending') }}"
