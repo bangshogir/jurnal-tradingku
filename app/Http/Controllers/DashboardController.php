@@ -37,17 +37,13 @@ class DashboardController extends Controller
         $todayTradesCount = $todayTradesList->count();
         $todayProfit = $todayTradesList->sum('profit_loss');
         
-        // For balance, we can either store it on each tick, or just keep a running total 
-        // if we assume starting balance. To keep it simple currently without a separate Balance table:
-        // Let's assume the user starts with 0 and balance = total PnL. 
-        // (A fully robust system would require the EA to send AccountInfoDouble(ACCOUNT_BALANCE)).
-        // For now, we will just display a static 0 or the Total PnL as balance if no explicit balance sent.
-        $currentBalance = $totalProfit; // Placeholder until MT5 sends real balance
+        // Real balance from MT5 (updated on each webhook event)
+        $currentBalance = Auth::user()->balance;
 
         return view('dashboard', compact(
-            'trades', 
-            'totalTrades', 
-            'totalProfit', 
+            'trades',
+            'totalTrades',
+            'totalProfit',
             'winRate',
             'todayTradesCount',
             'todayProfit',

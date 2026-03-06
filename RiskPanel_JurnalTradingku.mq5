@@ -459,7 +459,8 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    if(closeTimeStr != "") json += "\"close_time\": \"" + closeTimeStr + "\",";
    json += "\"magic_number\": \"" + IntegerToString(magicNumber) + "\",";
    StringReplace(comment, "\"", "\\\"");
-   json += "\"comment\": \"" + comment + "\"";
+   json += "\"comment\": \"" + comment + "\",";
+   json += "\"balance\": " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
    json += "}";
 
    char   post[], result_web[];

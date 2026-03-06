@@ -38,22 +38,29 @@ class TradingWebhookController extends Controller
 
         // Validate incoming data
         $validated = $request->validate([
-            'ticket_id' => 'required|string',
-            'symbol' => 'required|string',
-            'type' => 'required|string',
-            'entry_price' => 'nullable|numeric',
-            'close_price' => 'nullable|numeric',
-            'sl_price' => 'nullable|numeric',
-            'tp_price' => 'nullable|numeric',
-            'lot_size' => 'nullable|numeric',
-            'profit_loss' => 'nullable|numeric',
-            'swap' => 'nullable|numeric',
-            'commission' => 'nullable|numeric',
+            'ticket_id'    => 'required|string',
+            'symbol'       => 'required|string',
+            'type'         => 'required|string',
+            'entry_price'  => 'nullable|numeric',
+            'close_price'  => 'nullable|numeric',
+            'sl_price'     => 'nullable|numeric',
+            'tp_price'     => 'nullable|numeric',
+            'lot_size'     => 'nullable|numeric',
+            'profit_loss'  => 'nullable|numeric',
+            'swap'         => 'nullable|numeric',
+            'commission'   => 'nullable|numeric',
             'magic_number' => 'nullable|string',
-            'comment' => 'nullable|string',
-            'open_time' => 'nullable|date',
-            'close_time' => 'nullable|date',
+            'comment'      => 'nullable|string',
+            'open_time'    => 'nullable|date',
+            'close_time'   => 'nullable|date',
+            'balance'      => 'nullable|numeric',   // MT5 AccountInfoDouble(ACCOUNT_BALANCE)
         ]);
+
+        // Update the user's balance from MT5 whenever data is received
+        if (isset($validated['balance']) && $validated['balance'] > 0) {
+            $user->balance = $validated['balance'];
+            $user->save();
+        }
 
         // Handle Canceled Pending Orders
         if ($validated['type'] === 'pending_cancel') {
