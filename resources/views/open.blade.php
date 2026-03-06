@@ -6,97 +6,93 @@
 
 @section('content')
 
-    {{-- Open Orders Table --}}
-    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-            <h2 class="font-semibold text-slate-800">Open / Running Orders</h2>
+    {{-- Open Orders Table / Last Sales style --}}
+    <div class="mb-4 flex items-center justify-between mt-2">
+        <h2 class="text-lg font-bold text-slate-900 tracking-tight">Open / Running Orders</h2>
+        <div class="flex gap-2">
             <button onclick="window.location.reload()"
-                class="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all duration-200">
+                class="bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                    </path>
                 </svg>
                 Refresh
             </button>
         </div>
+    </div>
 
+    {{-- Tabs --}}
+    <div class="flex gap-6 border-b border-slate-200 mb-6 text-sm font-semibold text-slate-500">
+        <button class="pb-3 border-b-2 border-brand-600 text-brand-600">Active Positions</button>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-xs text-slate-400 uppercase tracking-wide">
+            <table class="min-w-full text-sm">
+                <thead
+                    class="bg-white text-[11px] text-slate-400 font-semibold tracking-wider uppercase border-b border-slate-100">
                     <tr>
-                        <th class="px-6 py-3 text-left">Time / Tanggal</th>
-                        <th class="px-6 py-3 text-left">Pair</th>
-                        <th class="px-6 py-3 text-left">Type</th>
-                        <th class="px-6 py-3 text-left">Volume</th>
-                        <th class="px-6 py-3 text-left">Entry Price</th>
-                        <th class="px-6 py-3 text-left">SL Price</th>
-                        <th class="px-6 py-3 text-left">TP Price</th>
-                        <th class="px-6 py-3 text-left">Profit / Loss</th>
+                        <th class="px-6 py-4 text-left font-medium">Position ID</th>
+                        <th class="px-6 py-4 text-left font-medium">Date</th>
+                        <th class="px-6 py-4 text-left font-medium">Type</th>
+                        <th class="px-6 py-4 text-left font-medium">Lot</th>
+                        <th class="px-6 py-4 text-left font-medium">Entry</th>
+                        <th class="px-6 py-4 text-left font-medium">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
                     @forelse ($trades as $trade)
-                        <tr class="hover:bg-slate-50/70 transition-colors duration-150">
-                            <td class="px-6 py-4 text-slate-500 whitespace-nowrap">
-                                <div class="font-medium text-slate-700">
-                                    {{ $trade->open_time ? $trade->open_time->format('d M Y') : '-' }}</div>
-                                <div class="text-xs text-slate-400">
-                                    {{ $trade->open_time ? $trade->open_time->format('H:i') : '' }}
-                                    @if ($trade->close_time)
-                                        → {{ $trade->close_time->format('H:i') }}
-                                    @endif
+                        <tr class="hover:bg-slate-50/50 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center gap-3">
+                                    <input type="checkbox"
+                                        class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                                    <div>
+                                        <p class="font-semibold text-slate-800 tracking-tight">{{ $trade->symbol }}</p>
+                                        <p class="text-[11px] text-slate-400">#{{ $trade->ticket_id }}</p>
+                                    </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <p class="font-semibold text-slate-800">{{ $trade->symbol }}</p>
-                                <p class="text-xs text-slate-400">#{{ $trade->ticket_id }}</p>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-500">
+                                {{ $trade->open_time ? $trade->open_time->format('d M Y') : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if (str_contains(strtolower($trade->type), 'buy'))
-                                    <span
-                                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">{{ str_replace('_', ' ', strtoupper($trade->type)) }}</span>
-                                @else
-                                    <span
-                                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">{{ str_replace('_', ' ', strtoupper($trade->type)) }}</span>
-                                @endif
+                                <span
+                                    class="capitalize font-medium text-slate-700">{{ str_replace('_', ' ', strtolower($trade->type)) }}</span>
                             </td>
-                            <td class="px-6 py-4 text-slate-600 whitespace-nowrap">{{ number_format($trade->lot_size, 2) }}
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-500 font-mono text-[12px]">
+                                {{ number_format($trade->lot_size, 2) }}
                             </td>
-                            <td class="px-6 py-4 text-slate-600 whitespace-nowrap font-mono text-xs">
-                                {{ number_format($trade->entry_price, 5) }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap font-mono text-xs">
-                                @php $slClose = $trade->sl_price > 0 && abs($trade->close_price - $trade->sl_price) <= 0.0005; @endphp
-                                <span class="{{ $slClose ? 'text-red-600 font-bold' : 'text-slate-500' }}">
-                                    {{ $trade->sl_price > 0 ? number_format($trade->sl_price, 5) : '-' }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap font-mono text-xs">
-                                @php $tpClose = $trade->tp_price > 0 && abs($trade->close_price - $trade->tp_price) <= 0.0005; @endphp
-                                <span class="{{ $tpClose ? 'text-emerald-600 font-bold' : 'text-slate-500' }}">
-                                    {{ $trade->tp_price > 0 ? number_format($trade->tp_price, 5) : '-' }}
-                                </span>
+                            <td class="px-6 py-4 whitespace-nowrap font-mono text-[12px] text-slate-600">
+                                ${{ number_format($trade->entry_price, 2) }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if ($trade->profit_loss >= 0)
+                                <div class="flex items-center gap-2">
                                     <span
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
-                                        +${{ number_format($trade->profit_loss, 2) }}
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-600 font-semibold text-[11px] border border-blue-100">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> In Progress
                                     </span>
-                                @else
-                                    <span
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 font-bold text-xs border border-red-200">
-                                        -${{ number_format(abs($trade->profit_loss), 2) }}
-                                    </span>
-                                @endif
+                                    <button class="text-slate-400 hover:text-slate-600">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z">
+                                            </path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-16 text-center">
-                                <div class="flex flex-col items-center text-slate-400">
-                                    <span class="text-4xl mb-3">📈</span>
-                                    <p class="font-medium">Belum ada posisi berjalan</p>
-                                    <p class="text-sm mt-1">Order yang tereksekusi akan muncul di sini otomatis.</p>
+                            <td colspan="6" class="px-6 py-20 text-center">
+                                <div class="flex flex-col items-center justify-center">
+                                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                                        <span class="text-3xl">📈</span>
+                                    </div>
+                                    <p class="font-semibold text-slate-700">No active positions</p>
+                                    <p class="text-sm text-slate-400 mt-1 max-w-sm">Market orders will appear here while
+                                        they are running.</p>
                                 </div>
                             </td>
                         </tr>

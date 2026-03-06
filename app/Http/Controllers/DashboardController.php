@@ -12,7 +12,7 @@ class DashboardController extends Controller
     public function index()
     {
         // Get all closed trades ordered by newest first, strictly constrained to the logged in user
-        $trades = TradingLog::where('user_id', Auth::id())
+        $trades = TradingLog::where('user_id', '=', Auth::id())
             ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
             ->orderBy('created_at', 'desc')
             ->get();

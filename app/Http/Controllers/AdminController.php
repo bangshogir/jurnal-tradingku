@@ -13,7 +13,7 @@ class AdminController extends Controller
         // Get all trades ordered by newest first from ALL users
         $trades = TradingLog::with('user')->orderBy('created_at', 'desc')->get();
 
-        $totalUsers = User::where('role', 'user')->count();
+        $totalUsers = User::where('role', '=', 'user')->count();
         $totalTrades = $trades->count();
         $totalProfit = $trades->sum('profit_loss');
         
