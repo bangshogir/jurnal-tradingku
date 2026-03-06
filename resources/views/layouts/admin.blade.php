@@ -130,6 +130,15 @@
                                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Pending Orders
+                        @php
+                            $pendingOrdersCount = \App\Models\TradingLog::where('user_id', auth()->id())
+                                ->whereIn('type', ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'])
+                                ->count();
+                        @endphp
+                        @if ($pendingOrdersCount > 0)
+                            <span
+                                class="ml-auto text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{{ $pendingOrdersCount }}</span>
+                        @endif
                     </a>
                 @endif
 

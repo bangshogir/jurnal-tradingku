@@ -58,8 +58,21 @@
                                 {{ $trade->open_time ? $trade->open_time->format('d M Y') : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
+                                @php
+                                    $typeStr = strtolower($trade->type);
+                                    $typeLabel = str_replace('_', ' ', $typeStr);
+                                    $isBuy = str_contains($typeStr, 'buy');
+                                    $isSell = str_contains($typeStr, 'sell');
+                                    $badgeClass = $isBuy
+                                        ? 'text-blue-700 bg-blue-50 border-blue-200'
+                                        : ($isSell
+                                            ? 'text-rose-700 bg-rose-50 border-rose-200'
+                                            : 'text-slate-700 bg-slate-50 border-slate-200');
+                                @endphp
                                 <span
-                                    class="capitalize font-medium text-slate-700">{{ str_replace('_', ' ', strtolower($trade->type)) }}</span>
+                                    class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border {{ $badgeClass }} capitalize">
+                                    {{ $typeLabel }}
+                                </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-500 font-mono text-[12px]">
                                 {{ number_format($trade->lot_size, 2) }}
