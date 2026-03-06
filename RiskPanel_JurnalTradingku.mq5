@@ -443,6 +443,16 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    StringReplace(openTimeStr,  ".", "-");
    StringReplace(closeTimeStr, ".", "-");
 
+   // Cent account detection: if currency contains 'c' (e.g. USC, USDc, USc)
+   // monetary values are in cents — divide by 100 to get real USD.
+   string accountCurrency = AccountInfoString(ACCOUNT_CURRENCY);
+   StringToLower(accountCurrency);
+   double divisor = (StringFind(accountCurrency, "c") >= 0) ? 100.0 : 1.0;
+   double realBalance     = AccountInfoDouble(ACCOUNT_BALANCE) / divisor;
+   double realProfitLoss  = profitLoss                         / divisor;
+   double realSwap        = swap                               / divisor;
+   double realCommission  = commission                         / divisor;
+
    string json = "{";
    json += "\"ticket_id\": \""   + IntegerToString(ticket)       + "\",";
    json += "\"symbol\": \""      + symbol                        + "\",";
@@ -452,15 +462,15 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    json += "\"sl_price\": "      + DoubleToString(slPrice, 5)    + ",";
    json += "\"tp_price\": "      + DoubleToString(tpPrice, 5)    + ",";
    json += "\"lot_size\": "      + DoubleToString(lotSize, 2)    + ",";
-   json += "\"profit_loss\": "   + DoubleToString(profitLoss, 2) + ",";
-   json += "\"swap\": "          + DoubleToString(swap, 2)       + ",";
-   json += "\"commission\": "    + DoubleToString(commission, 2) + ",";
+   json += "\"profit_loss\": "   + DoubleToString(realProfitLoss, 2) + ",";
+   json += "\"swap\": "          + DoubleToString(realSwap, 2)       + ",";
+   json += "\"commission\": "    + DoubleToString(realCommission, 2) + ",";
    if(openTimeStr  != "") json += "\"open_time\": \""  + openTimeStr  + "\",";
    if(closeTimeStr != "") json += "\"close_time\": \"" + closeTimeStr + "\",";
    json += "\"magic_number\": \"" + IntegerToString(magicNumber) + "\",";
    StringReplace(comment, "\"", "\\\"");
    json += "\"comment\": \"" + comment + "\",";
-   json += "\"balance\": " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
+   json += "\"balance\": " + DoubleToString(realBalance, 2);
    json += "}";
 
    char   post[], result_web[];
