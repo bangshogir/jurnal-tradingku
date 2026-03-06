@@ -383,6 +383,29 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
            }
         }
      }
+   else if(eventType == "deal_open") // OPEN ORDER/POSITION
+     {
+      if(!HistoryDealSelect(ticket)) return;
+      symbol    = HistoryDealGetString(ticket, DEAL_SYMBOL);
+      dealType  = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      typeStr   = (dealType == DEAL_TYPE_BUY) ? "buy" : ((dealType == DEAL_TYPE_SELL) ? "sell" : "other_open");
+      
+      long posID = HistoryDealGetInteger(ticket, DEAL_POSITION_ID);
+      ticket = posID; // Use Position ID as the unique ticket for updates
+      
+      entryPrice  = HistoryDealGetDouble(ticket, DEAL_PRICE);
+      lotSize     = HistoryDealGetDouble(ticket, DEAL_VOLUME);
+      openTime    = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+      magicNumber = HistoryDealGetInteger(ticket, DEAL_MAGIC);
+      comment     = HistoryDealGetString(ticket, DEAL_COMMENT);
+      
+      // Get SL/TP from the Position itself
+      if(PositionSelectByTicket(posID))
+        {
+         slPrice = PositionGetDouble(POSITION_SL);
+         tpPrice = PositionGetDouble(POSITION_TP);
+        }
+     }
    else if(eventType == "pending_order")
      {
       if(!HistoryOrderSelect(ticket)) return;
@@ -474,7 +497,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest      &request,
                         const MqlTradeResult       &result)
   {
-   // Rekam closed trade ke jurnal
+   // Rekam closed trade ke jurnal atau open posisi baru
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
      {
       ulong ticket = trans.deal;
@@ -483,6 +506,8 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
          long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
          if(entry == DEAL_ENTRY_OUT)
             SendTradeDataToWebhook(ticket, "deal_close");
+         else if(entry == DEAL_ENTRY_IN)
+            SendTradeDataToWebhook(ticket, "deal_open");
         }
      }
 

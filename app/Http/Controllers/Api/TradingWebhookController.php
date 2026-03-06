@@ -55,26 +55,30 @@ class TradingWebhookController extends Controller
             'close_time' => 'nullable|date',
         ]);
 
-        // Save to Database
+        // Save or Update to Database (State Machine: Pending -> Open -> Closed)
         try {
-            $log = TradingLog::create([
-                'user_id' => $user->id,
-                'ticket_id' => $validated['ticket_id'],
-                'symbol' => $validated['symbol'],
-                'type' => $validated['type'],
-                'entry_price' => $validated['entry_price'] ?? 0,
-                'close_price' => $validated['close_price'] ?? 0,
-                'sl_price' => $validated['sl_price'] ?? 0,
-                'tp_price' => $validated['tp_price'] ?? 0,
-                'lot_size' => $validated['lot_size'] ?? 0,
-                'profit_loss' => $validated['profit_loss'] ?? 0,
-                'open_time' => $validated['open_time'] ?? null,
-                'close_time' => $validated['close_time'] ?? null,
-                'swap' => $validated['swap'] ?? 0,
-                'commission' => $validated['commission'] ?? 0,
-                'magic_number' => $validated['magic_number'] ?? '',
-                'comment' => $validated['comment'] ?? '',
-            ]);
+            $log = TradingLog::updateOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'ticket_id' => $validated['ticket_id'], // MT5 Order Ticket / Position ID
+                ],
+                [
+                    'symbol' => $validated['symbol'],
+                    'type' => $validated['type'],
+                    'entry_price' => $validated['entry_price'] ?? 0,
+                    'close_price' => $validated['close_price'] ?? 0,
+                    'sl_price' => $validated['sl_price'] ?? 0,
+                    'tp_price' => $validated['tp_price'] ?? 0,
+                    'lot_size' => $validated['lot_size'] ?? 0,
+                    'profit_loss' => $validated['profit_loss'] ?? 0,
+                    'open_time' => $validated['open_time'] ?? null,
+                    'close_time' => $validated['close_time'] ?? null,
+                    'swap' => $validated['swap'] ?? 0,
+                    'commission' => $validated['commission'] ?? 0,
+                    'magic_number' => $validated['magic_number'] ?? '',
+                    'comment' => $validated['comment'] ?? '',
+                ]
+            );
             
             Log::info("Webhook received and saved for ticket: " . $validated['ticket_id']);
             return response()->json(['message' => 'Success', 'data' => $log], 201);

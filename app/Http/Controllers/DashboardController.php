@@ -65,4 +65,15 @@ class DashboardController extends Controller
             
         return view('pending', compact('trades'));
     }
+
+    public function openOrders()
+    {
+        // Get all running/open orders (buy/sell) for the logged in user
+        $trades = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy', 'sell']) // Usually "buy" or "sell" for open positions
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        return view('open', compact('trades'));
+    }
 }
