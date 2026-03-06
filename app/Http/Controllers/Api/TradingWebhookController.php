@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\TradingLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -22,10 +23,17 @@ class TradingWebhookController extends Controller
      */
     public function store(Request $request)
     {
-        // Simple authentication check
-        $apiKey = $request->header('X-API-KEY');
-        if ($apiKey !== 'secret-api-key-123') {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        // Authentication via Webhook Token
+        $token = $request->header('X-Webhook-Token') ?? $request->bearerToken() ?? $request->input('token');
+        
+        if (empty($token)) {
+            return response()->json(['message' => 'Unauthorized. No token provided.'], 401);
+        }
+
+        $user = User::where('webhook_token', $token)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized. Invalid token.'], 401);
         }
 
         // Validate incoming data
@@ -50,6 +58,7 @@ class TradingWebhookController extends Controller
         // Save to Database
         try {
             $log = TradingLog::create([
+                'user_id' => $user->id,
                 'ticket_id' => $validated['ticket_id'],
                 'symbol' => $validated['symbol'],
                 'type' => $validated['type'],

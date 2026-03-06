@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\TradingLog;
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Auth;
+
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Get all trades ordered by newest first
-        $trades = TradingLog::orderBy('created_at', 'desc')->get();
+        // Get all trades ordered by newest first, strictly constrained to the logged in user
+        $trades = TradingLog::where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         // Calculate statistics
         $totalTrades = $trades->count();

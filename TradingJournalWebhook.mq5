@@ -7,7 +7,7 @@
 #property version   "1.00"
 
 input string WebhookURL = "http://localhost:8000/api/webhook/trading-log"; // Webhook URL
-input string ApiKey = "secret-api-key-123";                                // API Key (X-API-KEY)
+input string WebhookToken = "";                                            // Webhook API Token
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -206,7 +206,7 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    
    // Prepare headers (add custom API key)
    headers = "Content-Type: application/json\r\n";
-   headers += "X-API-KEY: " + ApiKey + "\r\n";
+   headers += "X-Webhook-Token: " + WebhookToken + "\r\n";
    
    StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
    

@@ -6,36 +6,6 @@
 
 @section('content')
 
-    {{-- Webhook Token Banner --}}
-    <div
-        class="mb-6 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <h3 class="font-semibold text-white flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                    </path>
-                </svg>
-                Webhook API Token
-            </h3>
-            <p class="text-sm text-slate-400 mt-1">Masukkan token ini pada parameter input EA MetaTrader Anda.</p>
-        </div>
-        <div class="flex items-center gap-2">
-            <code
-                class="bg-slate-950 px-4 py-2.5 rounded-lg border border-slate-800 font-mono text-sm text-emerald-400 select-all">{{ auth()->user()->webhook_token }}</code>
-            <button
-                onclick="navigator.clipboard.writeText('{{ auth()->user()->webhook_token }}'); alert('Token berhasil disalin!')"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shrink-0">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
-                    </path>
-                </svg>
-                Salin
-            </button>
-        </div>
-    </div>
-
     {{-- 6 Stat Cards --}}
     <dl class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6 mb-6">
         @php
@@ -66,10 +36,10 @@
                 ],
                 ['label' => 'Win Rate', 'value' => $winRate . '%', 'color' => 'text-blue-600', 'icon' => '🏆'],
                 [
-                    'label' => 'Balance',
-                    'value' => '$' . number_format($currentBalance, 2),
-                    'color' => 'text-slate-800',
-                    'icon' => '💳',
+                    'label' => 'Total Users',
+                    'value' => number_format($totalUsers),
+                    'color' => 'text-indigo-600',
+                    'icon' => '👥',
                 ],
             ];
         @endphp
@@ -105,6 +75,7 @@
                 <thead class="bg-slate-50 text-xs text-slate-400 uppercase tracking-wide">
                     <tr>
                         <th class="px-6 py-3 text-left">Time / Tanggal</th>
+                        <th class="px-6 py-3 text-left">User</th>
                         <th class="px-6 py-3 text-left">Pair</th>
                         <th class="px-6 py-3 text-left">Type</th>
                         <th class="px-6 py-3 text-left">Volume</th>
@@ -126,6 +97,10 @@
                                         → {{ $trade->close_time->format('H:i') }}
                                     @endif
                                 </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <p class="font-semibold text-slate-800">{{ $trade->user->name ?? 'Unknown' }}</p>
+                                <p class="text-xs text-slate-400">{{ $trade->user->email ?? '' }}</p>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <p class="font-semibold text-slate-800">{{ $trade->symbol }}</p>
@@ -172,7 +147,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-16 text-center">
+                            <td colspan="9" class="px-6 py-16 text-center">
                                 <div class="flex flex-col items-center text-slate-400">
                                     <span class="text-4xl mb-3">⏳</span>
                                     <p class="font-medium">Belum ada data trading</p>

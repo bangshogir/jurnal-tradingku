@@ -10,6 +10,7 @@ class TradingLog extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'ticket_id',
         'symbol',
         'type',
@@ -32,4 +33,9 @@ class TradingLog extends Model
         'open_time' => 'datetime',
         'close_time' => 'datetime',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }
