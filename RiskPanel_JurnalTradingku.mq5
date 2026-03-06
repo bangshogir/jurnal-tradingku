@@ -408,22 +408,32 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
      }
    else if(eventType == "pending_order")
      {
-      if(!HistoryOrderSelect(ticket)) return;
-      symbol    = HistoryOrderGetString(ticket, ORDER_SYMBOL);
-      dealType  = HistoryOrderGetInteger(ticket, ORDER_TYPE);
+      if(!OrderSelect(ticket)) return;
+      symbol    = OrderGetString(ORDER_SYMBOL);
+      dealType  = OrderGetInteger(ORDER_TYPE);
       if(dealType == ORDER_TYPE_BUY_LIMIT)       typeStr = "buy_limit";
       else if(dealType == ORDER_TYPE_SELL_LIMIT)  typeStr = "sell_limit";
       else if(dealType == ORDER_TYPE_BUY_STOP)    typeStr = "buy_stop";
       else if(dealType == ORDER_TYPE_SELL_STOP)   typeStr = "sell_stop";
       else                                         typeStr = "unknown_pending";
-      entryPrice  = HistoryOrderGetDouble(ticket, ORDER_PRICE_OPEN);
-      slPrice     = HistoryOrderGetDouble(ticket, ORDER_SL);
-      tpPrice     = HistoryOrderGetDouble(ticket, ORDER_TP);
+      entryPrice  = OrderGetDouble(ORDER_PRICE_OPEN);
+      slPrice     = OrderGetDouble(ORDER_SL);
+      tpPrice     = OrderGetDouble(ORDER_TP);
       closePrice  = 0;
-      lotSize     = HistoryOrderGetDouble(ticket, ORDER_VOLUME_INITIAL);
-      openTime    = (datetime)HistoryOrderGetInteger(ticket, ORDER_TIME_SETUP);
+      lotSize     = OrderGetDouble(ORDER_VOLUME_INITIAL);
+      openTime    = (datetime)OrderGetInteger(ORDER_TIME_SETUP);
       closeTime   = 0;
       profitLoss  = 0; swap = 0; commission = 0;
+      magicNumber = OrderGetInteger(ORDER_MAGIC);
+      comment     = OrderGetString(ORDER_COMMENT);
+     }
+   else if(eventType == "pending_cancel")
+     {
+      if(!HistoryOrderSelect(ticket)) return;
+      symbol    = HistoryOrderGetString(ticket, ORDER_SYMBOL);
+      typeStr   = "pending_cancel";
+      entryPrice  = 0; slPrice = 0; tpPrice = 0; closePrice = 0; lotSize = 0;
+      openTime = 0; closeTime = 0; profitLoss = 0; swap = 0; commission = 0;
       magicNumber = HistoryOrderGetInteger(ticket, ORDER_MAGIC);
       comment     = HistoryOrderGetString(ticket, ORDER_COMMENT);
      }
@@ -511,16 +521,31 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
         }
      }
 
-   // Rekam pending order ke jurnal
+   // Rekam pending order baru
+   if(trans.type == TRADE_TRANSACTION_ORDER_ADD)
+     {
+      ulong order_ticket = trans.order;
+      if(OrderSelect(order_ticket))
+        {
+         long orderType = OrderGetInteger(ORDER_TYPE);
+         if(orderType == ORDER_TYPE_BUY_LIMIT  || orderType == ORDER_TYPE_SELL_LIMIT ||
+            orderType == ORDER_TYPE_BUY_STOP   || orderType == ORDER_TYPE_SELL_STOP)
+           { Sleep(100); SendTradeDataToWebhook(order_ticket, "pending_order"); }
+        }
+     }
+
+   // Rekam pending order yang dibatalkan
    if(trans.type == TRADE_TRANSACTION_HISTORY_ADD)
      {
       ulong order_ticket = trans.order;
       if(HistoryOrderSelect(order_ticket))
         {
          long orderType = HistoryOrderGetInteger(order_ticket, ORDER_TYPE);
-         if(orderType == ORDER_TYPE_BUY_LIMIT  || orderType == ORDER_TYPE_SELL_LIMIT ||
-            orderType == ORDER_TYPE_BUY_STOP   || orderType == ORDER_TYPE_SELL_STOP)
-           { Sleep(100); SendTradeDataToWebhook(order_ticket, "pending_order"); }
+         long orderState = HistoryOrderGetInteger(order_ticket, ORDER_STATE);
+         if((orderType == ORDER_TYPE_BUY_LIMIT  || orderType == ORDER_TYPE_SELL_LIMIT ||
+             orderType == ORDER_TYPE_BUY_STOP   || orderType == ORDER_TYPE_SELL_STOP) && 
+             orderState == ORDER_STATE_CANCELED)
+           { Sleep(100); SendTradeDataToWebhook(order_ticket, "pending_cancel"); }
         }
      }
   }

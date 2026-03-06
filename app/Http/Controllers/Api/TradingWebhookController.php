@@ -55,6 +55,16 @@ class TradingWebhookController extends Controller
             'close_time' => 'nullable|date',
         ]);
 
+        // Handle Canceled Pending Orders
+        if ($validated['type'] === 'pending_cancel') {
+            TradingLog::where('user_id', $user->id)
+                ->where('ticket_id', $validated['ticket_id'])
+                ->delete();
+            
+            Log::info("Webhook received: Pending order cancelled for ticket: " . $validated['ticket_id']);
+            return response()->json(['message' => 'Pending order cancelled successfully'], 200);
+        }
+
         // Save or Update to Database (State Machine: Pending -> Open -> Closed)
         try {
             $log = TradingLog::updateOrCreate(
