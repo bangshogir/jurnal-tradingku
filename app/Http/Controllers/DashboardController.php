@@ -11,8 +11,9 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        // Get all trades ordered by newest first, strictly constrained to the logged in user
+        // Get all closed trades ordered by newest first, strictly constrained to the logged in user
         $trades = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -52,5 +53,16 @@ class DashboardController extends Controller
             'todayProfit',
             'currentBalance'
         ));
+    }
+
+    public function pendingOrders()
+    {
+        // Get all pending orders (limit/stop) for the logged in user
+        $trades = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop', 'unknown_pending'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        return view('pending', compact('trades'));
     }
 }
