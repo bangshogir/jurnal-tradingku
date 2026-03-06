@@ -386,20 +386,22 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    else if(eventType == "deal_open") // OPEN ORDER/POSITION
      {
       if(!HistoryDealSelect(ticket)) return;
-      symbol    = HistoryDealGetString(ticket, DEAL_SYMBOL);
-      dealType  = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      ulong dealTicket = ticket; // save original deal ticket before overwriting
+      symbol    = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+      dealType  = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
       typeStr   = (dealType == DEAL_TYPE_BUY) ? "buy" : ((dealType == DEAL_TYPE_SELL) ? "sell" : "other_open");
       
-      long posID = HistoryDealGetInteger(ticket, DEAL_POSITION_ID);
-      ticket = posID; // Use Position ID as the unique ticket for updates
+      long posID = HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      ticket = posID; // Use Position ID as the unique key in Laravel
       
-      entryPrice  = HistoryDealGetDouble(ticket, DEAL_PRICE);
-      lotSize     = HistoryDealGetDouble(ticket, DEAL_VOLUME);
-      openTime    = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
-      magicNumber = HistoryDealGetInteger(ticket, DEAL_MAGIC);
-      comment     = HistoryDealGetString(ticket, DEAL_COMMENT);
+      // Fetch deal properties using the ORIGINAL deal ticket
+      entryPrice  = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+      lotSize     = HistoryDealGetDouble(dealTicket, DEAL_VOLUME);
+      openTime    = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+      magicNumber = HistoryDealGetInteger(dealTicket, DEAL_MAGIC);
+      comment     = HistoryDealGetString(dealTicket, DEAL_COMMENT);
       
-      // Get SL/TP from the Position itself
+      // Get SL/TP from the live Position
       if(PositionSelectByTicket(posID))
         {
          slPrice = PositionGetDouble(POSITION_SL);
