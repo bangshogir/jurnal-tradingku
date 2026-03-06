@@ -31,7 +31,7 @@
             }
         }
     </script>
-    <style>
+    <style type="text/tailwindcss">
         body {
             font-family: 'Inter', sans-serif;
         }
