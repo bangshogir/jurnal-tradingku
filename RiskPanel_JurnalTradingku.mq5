@@ -352,19 +352,22 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    if(eventType == "deal_close")
      {
       if(!HistoryDealSelect(ticket)) return;
-      symbol    = HistoryDealGetString(ticket, DEAL_SYMBOL);
-      dealType  = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      ulong dealTicket = ticket; // save close deal ticket
+      symbol    = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+      dealType  = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
       typeStr   = (dealType == DEAL_TYPE_BUY) ? "buy_closed" : ((dealType == DEAL_TYPE_SELL) ? "sell_closed" : "other_closed");
-      closePrice  = HistoryDealGetDouble(ticket, DEAL_PRICE);
-      lotSize     = HistoryDealGetDouble(ticket, DEAL_VOLUME);
-      profitLoss  = HistoryDealGetDouble(ticket, DEAL_PROFIT);
-      swap        = HistoryDealGetDouble(ticket, DEAL_SWAP);
-      commission  = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
-      magicNumber = HistoryDealGetInteger(ticket, DEAL_MAGIC);
-      comment     = HistoryDealGetString(ticket, DEAL_COMMENT);
-      closeTime   = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+      closePrice  = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+      lotSize     = HistoryDealGetDouble(dealTicket, DEAL_VOLUME);
+      profitLoss  = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+      swap        = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+      commission  = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      magicNumber = HistoryDealGetInteger(dealTicket, DEAL_MAGIC);
+      comment     = HistoryDealGetString(dealTicket, DEAL_COMMENT);
+      closeTime   = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
 
-      long posID = HistoryDealGetInteger(ticket, DEAL_POSITION_ID);
+      long posID = HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      ticket = posID; // KEY: use Position ID to match the open order record in Laravel
+
       if(HistorySelectByPosition(posID))
         {
          int dealsTotal = HistoryDealsTotal();
