@@ -22,7 +22,7 @@ CTrade ExtTrade;
 //=====================================================================
 input group "=== Risk Panel ==="
 input string  InpWebhookURL = "http://jurnaltradingku.my.id/api/webhook/trading-log"; // Webhook URL
-input string  InpApiKey     = "secret-api-key-123";                                   // API Key (X-API-KEY)
+input string  InpWebhookToken = "";                                                   // Webhook API Token
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -430,7 +430,7 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    json += "}";
 
    char   post[], result_web[];
-   string headers = "Content-Type: application/json\r\nX-API-KEY: " + InpApiKey + "\r\n";
+   string headers = "Content-Type: application/json\r\nX-Webhook-Token: " + InpWebhookToken + "\r\n";
    StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
    int post_size = ArraySize(post);
    if(post_size > 0) ArrayResize(post, post_size - 1);
