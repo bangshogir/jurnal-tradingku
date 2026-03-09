@@ -23,6 +23,7 @@ CTrade ExtTrade;
 input group "=== Risk Panel ==="
 input string  InpWebhookURL = "http://jurnaltradingku.my.id/api/webhook/trading-log"; // Webhook URL
 input string  InpWebhookToken = "";                                                   // Webhook API Token
+input int     InpResyncDays = 7;                                                      // Auto Resync History (Days)
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -493,9 +494,68 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
   }
 
 //=====================================================================
+// [5.5] AUTO RESYNC HISTORY
+//=====================================================================
+void ResyncHistory()
+  {
+   if(InpResyncDays <= 0) return;
+   Print("Starting History Resync for the last ", InpResyncDays, " days...");
+   
+   datetime endTime = TimeCurrent() + 86400; // tomorrow
+   datetime startTime = TimeCurrent() - (InpResyncDays * 24 * 60 * 60);
+   
+   // 1. Sync Closed Deals
+   if(HistorySelect(startTime, endTime))
+     {
+      int dealsTotal = HistoryDealsTotal();
+      for(int i = 0; i < dealsTotal; i++)
+        {
+         ulong ticket = HistoryDealGetTicket(i);
+         long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+         if(entry == DEAL_ENTRY_OUT)
+           {
+            SendTradeDataToWebhook(ticket, "deal_close");
+           }
+        }
+     }
+     
+   // 2. Sync Open Positions
+   int posTotal = PositionsTotal();
+   for(int i = 0; i < posTotal; i++)
+     {
+      ulong posTicket = PositionGetTicket(i);
+      long posID = PositionGetInteger(POSITION_IDENTIFIER);
+      if(HistorySelectByPosition(posID))
+        {
+         int dealsTotal = HistoryDealsTotal();
+         for(int d = 0; d < dealsTotal; d++)
+           {
+            ulong dticket = HistoryDealGetTicket(d);
+            if(HistoryDealGetInteger(dticket, DEAL_ENTRY) == DEAL_ENTRY_IN)
+              {
+               SendTradeDataToWebhook(dticket, "deal_open");
+               break;
+              }
+           }
+        }
+     }
+     
+   // 3. Sync Pending Orders
+   int ordersTotal = OrdersTotal();
+   for(int i = 0; i < ordersTotal; i++)
+     {
+      ulong orderTicket = OrderGetTicket(i);
+      SendTradeDataToWebhook(orderTicket, "pending_order");
+     }
+     
+   Print("History Resync Complete. All missing records updated.");
+  }
+
+//=====================================================================
 // [6] EA EVENT HANDLERS (MERGED)
 //=====================================================================
 datetime g_last_bar = 0;
+bool     g_resync_done = false;
 
 int OnInit()
   {
@@ -514,6 +574,13 @@ void OnDeinit(const int reason)
 
 void OnTick()
   {
+   // Auto Resync on first tick instead of OnInit to prevent timeout
+   if(!g_resync_done)
+     {
+      ResyncHistory();
+      g_resync_done = true;
+     }
+
    ExtPanel.UpdateStats();
    datetime cur = iTime(_Symbol, _Period, 0);
    if(cur != g_last_bar) { g_last_bar = cur; CheckCutLoss(); }
