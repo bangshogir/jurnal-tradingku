@@ -34,64 +34,63 @@ input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
 input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
 input int     InpOriginLookback = 50;    // Traceback max candle base
 input double  InpBufferPoints   = 20.0;    // Jarak Buffer SL (Points)
-input bool    InpDrawBaseZones  = true;    // Gambar Zona Base Terdeteksi
-input color   InpBaseColor      = C'255,150,0'; // Warna Zona Base (Orange)
+input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
+input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
+input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
+input color  InpMitColor       = clrGray;       // Warna Zona Termitigasi
+input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
+input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
+#define COL_EQH    clrTomato
+#define COL_EQL    clrLimeGreen
 
 //=====================================================================
-// GLOBAL VARIABLES FOR SND
+// ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
+struct ZoneData
+  {
+   string   rect_name;
+   string   lbl_name;
+   string   lbl_top;
+   string   lbl_btm;
+   bool     is_demand;
+   double   top;
+   double   btm;
+   datetime start_time;
+   bool     active;
+   bool     has_idm;
+   bool     is_ultra;
+  };
+
+#define MAX_ZONES    300
+
+ZoneData g_zones[MAX_ZONES];
+int      g_zone_count   = 0;
+int      g_obj_id       = 0;
+
 double   g_last_ph      = 0;
 datetime g_last_ph_time = 0;
 double   g_last_pl      = 0;
 datetime g_last_pl_time = 0;
+double   g_old_last_ph  = 0;
+double   g_old_last_pl  = 0;
 datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
 
 datetime g_last_processed_bar = 0;
 
-// STATE TRACKING FOR PENDING BASES WAITING FOR NEW PIVOT
-bool     g_pending_demand_active = false;
-int      g_pending_demand_origin_idx = -1;
-int      g_pending_demand_decisional_idx = -1;
-double   g_pending_demand_origin_low = 0; // Swing Low before BOS
+// Tracks BOS origin level for Fibo drawing (set when BOS fires)
+double   g_fibo_origin_bullish = 0; // Swing Low origin of Bullish BOS move
+double   g_fibo_origin_bearish = 0; // Swing High origin of Bearish BOS move
+datetime g_fibo_origin_bull_time = 0;
+datetime g_fibo_origin_bear_time = 0;
 
-bool     g_pending_supply_active = false;
-int      g_pending_supply_origin_idx = -1;
-int      g_pending_supply_decisional_idx = -1;
-double   g_pending_supply_origin_high = 0; // Swing High before BOS
+// Array to prevent duplicate pending orders on the same zone
+datetime g_traded_zones[];
+bool IsZoneTraded(datetime t) { int s=ArraySize(g_traded_zones); for(int i=0;i<s;i++) if(g_traded_zones[i]==t) return true; return false; }
+void MarkZoneTraded(datetime t) { int s=ArraySize(g_traded_zones); ArrayResize(g_traded_zones,s+1); g_traded_zones[s]=t; }
 
-// Array to remember already traded bases to avoid duplicate entries on old zones
-datetime g_traded_bases[];
-
-// Helper to check if a base was already traded
-bool IsBaseTraded(datetime baseTime)
-  {
-   int size = ArraySize(g_traded_bases);
-   for(int i=0; i<size; i++) { if(g_traded_bases[i] == baseTime) return true; }
-   return false;
-  }
-
-void MarkBaseTraded(datetime baseTime)
-  {
-   int size = ArraySize(g_traded_bases);
-   ArrayResize(g_traded_bases, size + 1);
-   g_traded_bases[size] = baseTime;
-  }
-
-void DrawBaseZone(datetime t1, double top, double btm, bool is_demand)
-  {
-   if(!InpDrawBaseZones) return;
-   string name = "AutoBase_" + (is_demand?"D_":"S_") + TimeToString(t1);
-   if(ObjectCreate(0, name, OBJ_RECTANGLE, 0, t1, top, D'2099.12.31', btm))
-     {
-      ObjectSetInteger(0, name, OBJPROP_COLOR, InpBaseColor);
-      ObjectSetInteger(0, name, OBJPROP_FILL, true);
-      ObjectSetInteger(0, name, OBJPROP_BACK, true);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetString(0, name, OBJPROP_TOOLTIP, "Pending "+(is_demand?"Demand":"Supply")+" Base");
-     }
-  }
+string NextID() { return IntegerToString(++g_obj_id); }
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -426,9 +425,50 @@ void ResyncHistory()
   }
 
 //=====================================================================
-// [6] AUTO SND TRADING ENGINE (FIBO & ZONEMAP)
+// [6] AUTO SND TRADING ENGINE - SnD_Zone Logic + Fibo Filter
 //=====================================================================
 
+// ---- Zone Drawing (from SnD_Zone.mq5) ----
+void DrawZone(bool is_demand, double top, double btm, datetime start_time)
+  {
+   if(g_zone_count >= MAX_ZONES) return;
+   color col_use = is_demand ? InpDemandColor : InpSupplyColor;
+   string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
+   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
+     { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
+   if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
+     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
+   string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
+   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT," "+DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT," "+DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
+   g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
+   g_zones[g_zone_count].active=true; g_zones[g_zone_count].has_idm=false; g_zones[g_zone_count].is_ultra=false;
+   g_zone_count++;
+  }
+
+void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
+  {
+   if(!InpShowBOS) return;
+   color col=is_bull?InpBOSBull:InpBOSBear;
+   string uid=NextID(),ln="SnD_B_"+uid,lb="SnD_BL_"+uid;
+   if(ObjectCreate(0,ln,OBJ_TREND,0,x1,price,x2,price)) { ObjectSetInteger(0,ln,OBJPROP_COLOR,col); ObjectSetInteger(0,ln,OBJPROP_STYLE,STYLE_DASH); ObjectSetInteger(0,ln,OBJPROP_RAY_RIGHT,false); ObjectSetInteger(0,ln,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ln,OBJPROP_BACK,true); }
+   datetime mid=(datetime)(((long)x1+(long)x2)/2);
+   if(ObjectCreate(0,lb,OBJ_TEXT,0,mid,price)) { ObjectSetString(0,lb,OBJPROP_TEXT,"BOS"); ObjectSetInteger(0,lb,OBJPROP_COLOR,col); ObjectSetInteger(0,lb,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lb,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lb,OBJPROP_BACK,true); }
+  }
+
+void MitigateZone(int idx, datetime t)
+  {
+   g_zones[idx].active=false;
+   ObjectDelete(0,g_zones[idx].rect_name); ObjectDelete(0,g_zones[idx].lbl_name); ObjectDelete(0,g_zones[idx].lbl_top); ObjectDelete(0,g_zones[idx].lbl_btm);
+  }
+
+void UpdateZoneLabelsTime(datetime t)
+  {
+   for(int i=0;i<g_zone_count;i++) if(g_zones[i].active) { ObjectMove(0,g_zones[i].lbl_top,0,t,g_zones[i].top); ObjectMove(0,g_zones[i].lbl_btm,0,t,g_zones[i].btm); }
+  }
+
+// ---- Pivot Detection ----
 double GetPivotHigh(int lb, int shift)
   {
    if(shift+2*lb >= iBars(_Symbol,_Period)) return 0;
@@ -445,190 +485,163 @@ double GetPivotLow(int lb, int shift)
    return c;
   }
 
-void FindDemandBases(int shift, datetime origin_time, int &origin_idx, int &decisional_idx)
+int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)<iOpen(_Symbol,_Period,i)) return i; return -1; }
+int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)>iOpen(_Symbol,_Period,i)) return i; return -1; }
+
+void CheckMitigation(int shift)
   {
-   origin_idx = -1; decisional_idx = -1;
-   double min_low = 999999;
-   for(int i=shift+1; i<=shift+InpOriginLookback; i++)
+   double l=iLow(_Symbol,_Period,shift), h=iHigh(_Symbol,_Period,shift);
+   datetime bt=iTime(_Symbol,_Period,shift);
+   for(int i=g_zone_count-1;i>=0;i--)
      {
-      if(iTime(_Symbol,_Period,i) < origin_time) break;
-      if(iClose(_Symbol,_Period,i) < iOpen(_Symbol,_Period,i)) // Bearish
-        {
-         if(decisional_idx == -1) decisional_idx = i;
-         if(iLow(_Symbol,_Period,i) < min_low) { min_low = iLow(_Symbol,_Period,i); origin_idx = i; }
-        }
+      if(!g_zones[i].active||bt<=g_zones[i].start_time) continue;
+      bool mit=g_zones[i].is_demand?(l<=g_zones[i].top):(h>=g_zones[i].btm);
+      if(mit) MitigateZone(i,bt);
      }
   }
 
-void FindSupplyBases(int shift, datetime origin_time, int &origin_idx, int &decisional_idx)
-  {
-   origin_idx = -1; decisional_idx = -1;
-   double max_high = 0;
-   for(int i=shift+1; i<=shift+InpOriginLookback; i++)
-     {
-      if(iTime(_Symbol,_Period,i) < origin_time) break;
-      if(iClose(_Symbol,_Period,i) > iOpen(_Symbol,_Period,i)) // Bullish
-        {
-         if(decisional_idx == -1) decisional_idx = i;
-         if(iHigh(_Symbol,_Period,i) > max_high) { max_high = iHigh(_Symbol,_Period,i); origin_idx = i; }
-        }
-     }
-  }
-
-void ExecuteAutoTrade(bool isDemand, double baseTop, double baseBtm, datetime baseTime)
+// ---- Execution ----
+void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
   {
    if(!InpEnableAutoSnD) return;
-   
-   // Check if this specific zone has already been executed/mitigated
-   if(IsBaseTraded(baseTime)) return;
-   
+   if(IsZoneTraded(zoneTime)) return;
    double risk = StringToDouble(ExtPanel.m_edt_risk.Text());
    if(risk <= 0) return;
-
    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   
-   double entryPrice = isDemand ? baseTop : baseBtm;
-   double stopLoss = isDemand ? (baseBtm - InpBufferPoints*pt) : (baseTop + InpBufferPoints*pt);
+   double entryPrice = isDemand ? zoneTop : zoneBtm;
+   double stopLoss = isDemand ? (zoneBtm - InpBufferPoints*pt) : (zoneTop + InpBufferPoints*pt);
    entryPrice = NormalizeDouble(entryPrice, digits);
    stopLoss = NormalizeDouble(stopLoss, digits);
-   
    double lot = CalcLotSize(ExtPanel.AdjRisk(), entryPrice, stopLoss, _Symbol);
    if(lot <= 0) return;
-   
    long val = ExtPanel.m_cbx_ratio.Value(); if(val == 0) val = 10;
    double mult = val / 10.0;
    double diff = MathAbs(entryPrice - stopLoss);
-   double tpPrice = isDemand ? (entryPrice + diff * mult) : (entryPrice - diff * mult);
+   double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
    tpPrice = NormalizeDouble(tpPrice, digits);
-   
    string comm = "SND_AUTO";
    if(ExtPanel.m_cl_active) comm = "SND_CL_" + DoubleToString(stopLoss, digits);
-   
-   bool result = false;
-   if(isDemand)
-      result = ExtTrade.BuyLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
-   else
-      result = ExtTrade.SellLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
-      
+   bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm)
+                          : ExtTrade.SellLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
    if(result)
      {
-      MarkBaseTraded(baseTime);
-      Print("AutoSnD Executed: ", (isDemand?"Buy Limit":"Sell Limit"), " at ", entryPrice, " SL: ", stopLoss);
+      MarkZoneTraded(zoneTime);
+      Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
      }
   }
 
+// ---- Fibo Filter: Check all active zones vs current Fibo grid ----
+void CheckFiboAndTrade(double fibo_low, double fibo_high)
+  {
+   // Golden Zone boundaries
+   double dist     = fibo_high - fibo_low;
+   double f_upper  = fibo_high - dist * 0.382; // 38.2 retracement from high
+   double f_lower  = fibo_high - dist * 0.618; // 61.8 retracement from high
+
+   for(int i=0;i<g_zone_count;i++)
+     {
+      if(!g_zones[i].active) continue;
+      if(IsZoneTraded(g_zones[i].start_time)) continue;
+
+      // Check if the zone overlaps (touches or is inside) the Golden Zone
+      bool overlaps = (g_zones[i].top >= f_lower) && (g_zones[i].btm <= f_upper);
+      if(!overlaps) continue;
+
+      // Execute Demand or Supply
+      ExecuteAutoTrade(g_zones[i].is_demand, g_zones[i].top, g_zones[i].btm, g_zones[i].start_time);
+     }
+  }
+
+// ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
 void ProcessBar(int shift)
   {
-   double ph = GetPivotHigh(InpPivotLB, shift);
-   if(ph > 0) { g_last_ph = ph; g_last_ph_time = iTime(_Symbol,_Period,shift+InpPivotLB); }
+   g_old_last_ph=g_last_ph; g_old_last_pl=g_last_pl;
 
-   double pl = GetPivotLow(InpPivotLB, shift);
-   if(pl > 0) { g_last_pl = pl; g_last_pl_time = iTime(_Symbol,_Period,shift+InpPivotLB); }
+   double ph=GetPivotHigh(InpPivotLB,shift);
+   if(ph>0)
+     {
+      datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
+      g_last_ph=ph; g_last_ph_time=t;
+      // After BOS Bearish, new PL = confirmation pivot -> draw Fibo from origin High to new PL
+      if(g_fibo_origin_bearish > 0 && t > g_fibo_origin_bear_time)
+        {
+         // For supply zones: Fibo drawn from swing High (origin) DOWN to new PL (ph is new PH after bear BOS, skip)
+         // Actually: after a Bear BOS, we wait for a new Pivot LOW (counter-trend)
+         // We trigger when a new PH forms as final confirmation, but user wants per new pivot
+         // Keep both triggers below
+        }
+     }
 
-   if(g_last_ph <= 0 || g_last_pl <= 0) return;
+   double pl=GetPivotLow(InpPivotLB,shift);
+   if(pl>0)
+     {
+      datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
+      g_last_pl=pl; g_last_pl_time=t;
+     }
 
-   // 1. Detect BOS
    bool bull_fvg=iLow(_Symbol,_Period,shift)>iHigh(_Symbol,_Period,shift+2);
    bool bear_fvg=iHigh(_Symbol,_Period,shift)<iLow(_Symbol,_Period,shift+2);
    double cls=iClose(_Symbol,_Period,shift);
 
-   bool bull_bos = bull_fvg && (cls > g_last_ph) && (g_last_ph_time != g_marked_ph_time);
-   bool bear_bos = bear_fvg && (cls < g_last_pl) && (g_last_pl_time != g_marked_pl_time);
+   bool bull_bos=bull_fvg&&g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
+   bool bear_bos=bear_fvg&&g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
 
-   // 2. If BOS happens, find the Bases and set to Pending State
-   if(bull_bos && !g_pending_demand_active)
+   if(bull_bos)
      {
-      g_marked_ph_time = g_last_ph_time;
-      int origin=-1, decisional=-1;
-      FindDemandBases(shift, g_last_pl_time, origin, decisional);
-      if(origin != -1 || decisional != -1)
+      g_marked_ph_time=g_last_ph_time;
+      DrawBOS(true,g_last_ph,g_last_ph_time,iTime(_Symbol,_Period,shift));
+      int base=FindDemandBase(shift);
+      if(base!=-1)
         {
-         g_pending_demand_active = true;
-         g_pending_demand_origin_idx = origin;
-         g_pending_demand_decisional_idx = (origin != decisional) ? decisional : -1;
-         g_pending_demand_origin_low = g_last_pl; // This is the origin of the move
-         
-         if(origin != -1) DrawBaseZone(iTime(_Symbol,_Period,origin), iHigh(_Symbol,_Period,origin), iLow(_Symbol,_Period,origin), true);
-         if(g_pending_demand_decisional_idx != -1) DrawBaseZone(iTime(_Symbol,_Period,decisional), iHigh(_Symbol,_Period,decisional), iLow(_Symbol,_Period,decisional), true);
+         DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+         // Record fibo origin: from Swing Low before BOS to next Pivot High
+         g_fibo_origin_bullish  = g_last_pl;
+         g_fibo_origin_bull_time = g_last_pl_time;
         }
      }
 
-   if(bear_bos && !g_pending_supply_active)
+   if(bear_bos)
      {
-      g_marked_pl_time = g_last_pl_time;
-      int origin=-1, decisional=-1;
-      FindSupplyBases(shift, g_last_ph_time, origin, decisional);
-      if(origin != -1 || decisional != -1)
+      g_marked_pl_time=g_last_pl_time;
+      DrawBOS(false,g_last_pl,g_last_pl_time,iTime(_Symbol,_Period,shift));
+      int base=FindSupplyBase(shift);
+      if(base!=-1)
         {
-         g_pending_supply_active = true;
-         g_pending_supply_origin_idx = origin;
-         g_pending_supply_decisional_idx = (origin != decisional) ? decisional : -1;
-         g_pending_supply_origin_high = g_last_ph; // This is the origin of the move
-         
-         if(origin != -1) DrawBaseZone(iTime(_Symbol,_Period,origin), iHigh(_Symbol,_Period,origin), iLow(_Symbol,_Period,origin), false);
-         if(g_pending_supply_decisional_idx != -1) DrawBaseZone(iTime(_Symbol,_Period,decisional), iHigh(_Symbol,_Period,decisional), iLow(_Symbol,_Period,decisional), false);
+         DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+         // Record fibo origin: from Swing High before BOS to next Pivot Low
+         g_fibo_origin_bearish  = g_last_ph;
+         g_fibo_origin_bear_time = g_last_ph_time;
         }
      }
 
-   // 3. Wait for new Pivot to form & Draw Fibo & Validate
-   if(g_pending_demand_active && ph > 0 && g_last_ph_time > g_marked_ph_time)
+   // Every new Pivot, check if any zone is in the current Fibo Golden Zone
+   if(ph > 0 && g_fibo_origin_bullish > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
-      // New Pivot High formed AFTER our base. TIME TO DRAW FIBO!
-      double dist = g_last_ph - g_pending_demand_origin_low; 
-      double limit_upper = g_last_ph - dist * 0.382;
-      double limit_lower = g_last_ph - dist * 0.618;
-      
-      // Check Origin Base
-      if(g_pending_demand_origin_idx != -1)
-        {
-         double baseTop = iHigh(_Symbol,_Period,g_pending_demand_origin_idx);
-         double baseBtm = iLow(_Symbol,_Period,g_pending_demand_origin_idx);
-         if(baseTop >= limit_lower && baseBtm <= limit_upper)
-            ExecuteAutoTrade(true, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_demand_origin_idx));
-        }
-
-      // Check Decisional Base
-      if(g_pending_demand_decisional_idx != -1)
-        {
-         double baseTop = iHigh(_Symbol,_Period,g_pending_demand_decisional_idx);
-         double baseBtm = iLow(_Symbol,_Period,g_pending_demand_decisional_idx);
-         if(baseTop >= limit_lower && baseBtm <= limit_upper)
-            ExecuteAutoTrade(true, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_demand_decisional_idx));
-        }
-      
-      // Regardless of validation, reset the state because a cycle is finished
-      g_pending_demand_active = false;
+      // New Pivot High confirmed after Bullish BOS: Fibo from origin_low to new PH
+      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph);
      }
 
-   if(g_pending_supply_active && pl > 0 && g_last_pl_time > g_marked_pl_time)
+   if(pl > 0 && g_fibo_origin_bearish > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
-      // New Pivot Low formed AFTER our base. TIME TO DRAW FIBO!
-      double dist = g_pending_supply_origin_high - g_last_pl;
-      double limit_upper = g_last_pl + dist * 0.618;
-      double limit_lower = g_last_pl + dist * 0.382;
-      
-      // Check Origin Base
-      if(g_pending_supply_origin_idx != -1)
-        {
-         double baseTop = iHigh(_Symbol,_Period,g_pending_supply_origin_idx);
-         double baseBtm = iLow(_Symbol,_Period,g_pending_supply_origin_idx);
-         if(baseTop >= limit_lower && baseBtm <= limit_upper)
-            ExecuteAutoTrade(false, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_supply_origin_idx));
-        }
-
-      // Check Decisional Base
-      if(g_pending_supply_decisional_idx != -1)
-        {
-         double baseTop = iHigh(_Symbol,_Period,g_pending_supply_decisional_idx);
-         double baseBtm = iLow(_Symbol,_Period,g_pending_supply_decisional_idx);
-         if(baseTop >= limit_lower && baseBtm <= limit_upper)
-            ExecuteAutoTrade(false, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_supply_decisional_idx));
-        }
-      
-      // Regardless of validation, reset the state
-      g_pending_supply_active = false;
+      // New Pivot Low confirmed after Bearish BOS: Fibo from new PL to origin_high
+      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish);
      }
+
+   CheckMitigation(shift);
+  }
+
+void ScanHistory()
+  {
+   int total=iBars(_Symbol,_Period);
+   int start=MathMin(InpHistoryBars+InpPivotLB*2+InpOriginLookback,total-2);
+   for(int i=start;i>=1;i--) ProcessBar(i);
+  }
+
+void DeleteAllSnDObjects()
+  {
+   for(int i=ObjectsTotal(0)-1;i>=0;i--)
+     { string n=ObjectName(0,i); if(StringFind(n,"SnD_")==0) ObjectDelete(0,n); }
   }
 
 
@@ -642,8 +655,7 @@ int OnInit()
    if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 420)) return INIT_FAILED;
    ExtPanel.Run();
    
-   // Init scanning Pivot for historical references (100 bars)
-   for(int i=100; i>=1; i--) ProcessBar(i);
+   ScanHistory(); // Scan full history using SnD_Zone logic
    g_last_processed_bar = iTime(_Symbol, _Period, 0);
    
    Print("AutoSnD EA v3.00 Ready. Trading: ", (InpEnableAutoSnD?"ON":"OFF"));
@@ -652,6 +664,7 @@ int OnInit()
 
 void OnDeinit(const int reason)
   {
+   DeleteAllSnDObjects();
    ExtPanel.Destroy(reason);
   }
 
