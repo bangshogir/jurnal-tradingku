@@ -33,7 +33,9 @@ input group "=== Auto SnD Trading Logic ==="
 input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
 input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
 input int     InpOriginLookback = 50;    // Traceback max candle base
-input double  InpBufferPoints   = 50;    // SL Buffer from Zone (Points)
+input double  InpBufferPoints   = 20.0;    // Jarak Buffer SL (Points)
+input bool    InpDrawBaseZones  = true;    // Gambar Zona Base Terdeteksi
+input color   InpBaseColor      = C'255,150,0'; // Warna Zona Base (Orange)
 
 
 //=====================================================================
@@ -73,7 +75,19 @@ void MarkBaseTraded(datetime baseTime)
    g_traded_bases[size] = baseTime;
   }
 
-
+void DrawBaseZone(datetime t1, double top, double btm, bool is_demand)
+  {
+   if(!InpDrawBaseZones) return;
+   string name = "AutoBase_" + (is_demand?"D_":"S_") + TimeToString(t1);
+   if(ObjectCreate(0, name, OBJ_RECTANGLE, 0, t1, top, D'2099.12.31', btm))
+     {
+      ObjectSetInteger(0, name, OBJPROP_COLOR, InpBaseColor);
+      ObjectSetInteger(0, name, OBJPROP_FILL, true);
+      ObjectSetInteger(0, name, OBJPROP_BACK, true);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+      ObjectSetString(0, name, OBJPROP_TOOLTIP, "Pending "+(is_demand?"Demand":"Supply")+" Base");
+     }
+  }
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -500,6 +514,7 @@ void ProcessBar(int shift)
          g_pending_demand_active = true;
          g_pending_demand_base_idx = base;
          g_pending_demand_origin_low = g_last_pl; // This is the origin of the move
+         DrawBaseZone(iTime(_Symbol,_Period,base), iHigh(_Symbol,_Period,base), iLow(_Symbol,_Period,base), true);
         }
      }
 
@@ -511,6 +526,7 @@ void ProcessBar(int shift)
          g_pending_supply_active = true;
          g_pending_supply_base_idx = base;
          g_pending_supply_origin_high = g_last_ph; // This is the origin of the move
+         DrawBaseZone(iTime(_Symbol,_Period,base), iHigh(_Symbol,_Period,base), iLow(_Symbol,_Period,base), false);
         }
      }
 
