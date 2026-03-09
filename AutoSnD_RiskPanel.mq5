@@ -48,6 +48,25 @@ datetime g_marked_pl_time = 0;
 
 datetime g_last_processed_bar = 0;
 
+// Array to remember already traded bases to avoid duplicate entries on old zones
+datetime g_traded_bases[];
+
+// Helper to check if a base was already traded
+bool IsBaseTraded(datetime baseTime)
+  {
+   int size = ArraySize(g_traded_bases);
+   for(int i=0; i<size; i++) { if(g_traded_bases[i] == baseTime) return true; }
+   return false;
+  }
+
+void MarkBaseTraded(datetime baseTime)
+  {
+   int size = ArraySize(g_traded_bases);
+   ArrayResize(g_traded_bases, size + 1);
+   g_traded_bases[size] = baseTime;
+  }
+
+
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -404,9 +423,12 @@ double GetPivotLow(int lb, int shift)
 int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)<iOpen(_Symbol,_Period,i)) return i; return -1; }
 int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)>iOpen(_Symbol,_Period,i)) return i; return -1; }
 
-void ExecuteAutoTrade(bool isDemand, double baseTop, double baseBtm)
+void ExecuteAutoTrade(bool isDemand, double baseTop, double baseBtm, datetime baseTime)
   {
    if(!InpEnableAutoSnD) return;
+   
+   // Check if this specific zone has already been executed/mitigated
+   if(IsBaseTraded(baseTime)) return;
    
    double risk = StringToDouble(ExtPanel.m_edt_risk.Text());
    if(risk <= 0) return;
@@ -431,12 +453,17 @@ void ExecuteAutoTrade(bool isDemand, double baseTop, double baseBtm)
    string comm = "SND_AUTO";
    if(ExtPanel.m_cl_active) comm = "SND_CL_" + DoubleToString(stopLoss, digits);
    
+   bool result = false;
    if(isDemand)
-      ExtTrade.BuyLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
+      result = ExtTrade.BuyLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
    else
-      ExtTrade.SellLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
+      result = ExtTrade.SellLimit(lot, entryPrice, _Symbol, stopLoss, tpPrice, ORDER_TIME_GTC, 0, comm);
       
-   Print("AutoSnD Executed: ", (isDemand?"Buy Limit":"Sell Limit"), " at ", entryPrice, " SL: ", stopLoss);
+   if(result)
+     {
+      MarkBaseTraded(baseTime);
+      Print("AutoSnD Executed: ", (isDemand?"Buy Limit":"Sell Limit"), " at ", entryPrice, " SL: ", stopLoss);
+     }
   }
 
 void ProcessBar(int shift)
@@ -472,7 +499,10 @@ void ProcessBar(int shift)
          
          // Golden Zone Confluence -> Valid jika Base Intersection dg FIBO 38.2 - 61.8 (Discount Area utk Bullish)
          if(baseTop >= f382 && baseBtm <= f618)
-            ExecuteAutoTrade(true, baseTop, baseBtm);
+           {
+            datetime baseTime = iTime(_Symbol, _Period, base);
+            ExecuteAutoTrade(true, baseTop, baseBtm, baseTime);
+           }
         }
      }
 
@@ -492,7 +522,10 @@ void ProcessBar(int shift)
          
          // Golden Zone Confluence
          if(baseTop >= f618 && baseBtm <= f382)
-            ExecuteAutoTrade(false, baseTop, baseBtm);
+           {
+            datetime baseTime = iTime(_Symbol, _Period, base);
+            ExecuteAutoTrade(false, baseTop, baseBtm, baseTime);
+           }
         }
      }
   }
