@@ -64,17 +64,20 @@
             class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 transition-all duration-300">
 
             {{-- Logo --}}
-            <div class="flex items-center gap-3 px-6 py-6">
+            <div class="flex items-center gap-3 px-6 py-6 border-b border-transparent">
+                {{-- Candlestick / Chart Icon --}}
                 <div
-                    class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-brand-500/30">
+                    class="w-9 h-9 bg-gradient-to-br from-brand-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-500/30">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"
+                            d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                     </svg>
                 </div>
-                <div>
-                    <span class="text-slate-900 font-bold text-lg leading-tight block tracking-tight">Shopall<span
-                            class="text-brand-600">.</span></span>
+                <div class="flex flex-col">
+                    <span class="text-slate-900 font-extrabold text-[20px] leading-none tracking-tight">
+                        Jurnal<span class="text-brand-600">.</span>
+                    </span>
+                    <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mt-0.5">Trading</span>
                 </div>
             </div>
 
