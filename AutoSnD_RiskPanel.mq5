@@ -150,8 +150,9 @@ public:
    CLabel    m_lbl_pair, m_lbl_spread, m_lbl_atr, m_lbl_footer;
    CEdit     m_edt_risk, m_edt_entry, m_edt_sl;
    CComboBox m_cbx_ratio;
-   CButton   m_btn_place, m_btn_cancel, m_btn_cutloss;
+   CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
    bool      m_cl_active;
+   bool      m_risk_in_percent;
 
    bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); return Add(l); }
    bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); return Add(e); }
@@ -159,7 +160,20 @@ public:
    void      SetStatus(string t) { m_lbl_status.Text("Status: " + t); }
    bool      IsCent() { string c = AccountInfoString(ACCOUNT_CURRENCY); return StringFind(c, "USC") >= 0 || StringFind(c, "ent") >= 0; }
    string    AccCurr() { return IsCent() ? "USD" : AccountInfoString(ACCOUNT_CURRENCY); }
-   double    AdjRisk() { double r = StringToDouble(m_edt_risk.Text()); return IsCent() ? r * 100.0 : r; }
+   
+   // Calculates the raw risk amount in account currency terms
+   double    AdjRisk() { 
+      double r = StringToDouble(m_edt_risk.Text());
+      double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+      double raw_risk_amount = 0;
+      
+      if(m_risk_in_percent)
+         raw_risk_amount = balance * (r / 100.0);
+      else
+         raw_risk_amount = IsCent() ? (r * 100.0) : r;
+         
+      return raw_risk_amount;
+   }
    
    void      UpdateBalance() { double b = AccountInfoDouble(ACCOUNT_BALANCE); if(IsCent()) b /= 100.0; m_lbl_balance.Text("Balance: " + AccCurr() + " " + DoubleToString(b, 2)); }
    void      UpdateLot() { 
@@ -181,6 +195,13 @@ public:
    string    RetcodeMsg(uint c) { return "Code: " + IntegerToString((int)c); }
    void      OnCancelBtn() { m_edt_entry.Text(""); m_edt_sl.Text(""); m_lbl_lot.Text("Lot Size: --"); SetStatus("Dibatalkan."); }
    void      OnCutLoss() { m_cl_active = !m_cl_active; m_btn_cutloss.Text(m_cl_active ? "CL: ON" : "CL: OFF"); SetStatus(m_cl_active ? "Cut Loss ON" : "Cut Loss OFF"); }
+   
+   void      OnRiskModeToggle() {
+      m_risk_in_percent = !m_risk_in_percent;
+      m_btn_risk_mode.Text(m_risk_in_percent ? "MODE: %" : "MODE: $");
+      m_lbl_risk.Text(m_risk_in_percent ? "Risk (%):" : "Risk ($):");
+      UpdateLot();
+   }
    
    void      OnPlace() {
       double risk = StringToDouble(m_edt_risk.Text()); double entry = StringToDouble(m_edt_entry.Text()); double sl = StringToDouble(m_edt_sl.Text());
@@ -211,7 +232,7 @@ public:
    void      OnInput() { UpdateLot(); }
    void      UpdateStats() { m_lbl_pair.Text(_Symbol); UpdateBalance(); }
 
-   CRiskPanel() { m_cl_active = false; }
+   CRiskPanel() { m_cl_active = false; m_risk_in_percent = true; }
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
       int y = 10, rh = 30;
@@ -219,8 +240,10 @@ public:
       if(!MkLabel(m_lbl_spread, "LSpread", "SND AUTO: " + (InpEnableAutoSnD ? "ON" : "OFF"), 85, y, 270, y + 20)) return false;
       y += rh;
       if(!MkLabel(m_lbl_balance, "Bal", "Balance: --",        15, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_risk,    "LR",  "Risk:", 15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_risk,     "ER",  "1.0",               110, y, 260, y + 20)) return false; y += rh;
+      if(!MkLabel(m_lbl_risk,    "LR",  "Risk (%):", 15, y, 90, y + 20)) return false;
+      if(!MkEdit(m_edt_risk,     "ER",  "1.0",               95, y, 180, y + 20)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       190, y, 260, y + 20)) return false;
+      y += rh;
       if(!MkLabel(m_lbl_entry,   "LE",  "Entry Price:",        15, y, 105, y + 20)) return false;
       if(!MkEdit(m_edt_entry,    "EE",  "",                  110, y, 260, y + 20)) return false; y += rh;
       if(!MkLabel(m_lbl_sl,      "LS",  "Stop Loss:",          15, y, 105, y + 20)) return false;
@@ -242,6 +265,7 @@ public:
          if(lp == m_btn_place.Id())   { OnPlace();     return true; }
          if(lp == m_btn_cancel.Id())  { OnCancelBtn(); return true; }
          if(lp == m_btn_cutloss.Id()) { OnCutLoss();   return true; }
+         if(lp == m_btn_risk_mode.Id()){ OnRiskModeToggle(); return true; }
       }
       if(id == CHARTEVENT_CUSTOM + ON_END_EDIT) { if(lp == m_edt_risk.Id() || lp == m_edt_entry.Id() || lp == m_edt_sl.Id()) { OnInput(); return true; } }
       return CAppDialog::OnEvent(id, lp, dp, sp);
