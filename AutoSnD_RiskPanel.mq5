@@ -45,16 +45,20 @@ double   g_last_ph      = 0;
 datetime g_last_ph_time = 0;
 double   g_last_pl      = 0;
 datetime g_last_pl_time = 0;
+datetime g_marked_ph_time = 0;
+datetime g_marked_pl_time = 0;
 
 datetime g_last_processed_bar = 0;
 
 // STATE TRACKING FOR PENDING BASES WAITING FOR NEW PIVOT
 bool     g_pending_demand_active = false;
-int      g_pending_demand_base_idx = -1;
+int      g_pending_demand_origin_idx = -1;
+int      g_pending_demand_decisional_idx = -1;
 double   g_pending_demand_origin_low = 0; // Swing Low before BOS
 
 bool     g_pending_supply_active = false;
-int      g_pending_supply_base_idx = -1;
+int      g_pending_supply_origin_idx = -1;
+int      g_pending_supply_decisional_idx = -1;
 double   g_pending_supply_origin_high = 0; // Swing High before BOS
 
 // Array to remember already traded bases to avoid duplicate entries on old zones
@@ -441,8 +445,35 @@ double GetPivotLow(int lb, int shift)
    return c;
   }
 
-int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)<iOpen(_Symbol,_Period,i)) return i; return -1; }
-int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)>iOpen(_Symbol,_Period,i)) return i; return -1; }
+void FindDemandBases(int shift, datetime origin_time, int &origin_idx, int &decisional_idx)
+  {
+   origin_idx = -1; decisional_idx = -1;
+   double min_low = 999999;
+   for(int i=shift+1; i<=shift+InpOriginLookback; i++)
+     {
+      if(iTime(_Symbol,_Period,i) < origin_time) break;
+      if(iClose(_Symbol,_Period,i) < iOpen(_Symbol,_Period,i)) // Bearish
+        {
+         if(decisional_idx == -1) decisional_idx = i;
+         if(iLow(_Symbol,_Period,i) < min_low) { min_low = iLow(_Symbol,_Period,i); origin_idx = i; }
+        }
+     }
+  }
+
+void FindSupplyBases(int shift, datetime origin_time, int &origin_idx, int &decisional_idx)
+  {
+   origin_idx = -1; decisional_idx = -1;
+   double max_high = 0;
+   for(int i=shift+1; i<=shift+InpOriginLookback; i++)
+     {
+      if(iTime(_Symbol,_Period,i) < origin_time) break;
+      if(iClose(_Symbol,_Period,i) > iOpen(_Symbol,_Period,i)) // Bullish
+        {
+         if(decisional_idx == -1) decisional_idx = i;
+         if(iHigh(_Symbol,_Period,i) > max_high) { max_high = iHigh(_Symbol,_Period,i); origin_idx = i; }
+        }
+     }
+  }
 
 void ExecuteAutoTrade(bool isDemand, double baseTop, double baseBtm, datetime baseTime)
   {
@@ -502,73 +533,99 @@ void ProcessBar(int shift)
    bool bear_fvg=iHigh(_Symbol,_Period,shift)<iLow(_Symbol,_Period,shift+2);
    double cls=iClose(_Symbol,_Period,shift);
 
-   bool bull_bos = bull_fvg && (cls > g_last_ph);
-   bool bear_bos = bear_fvg && (cls < g_last_pl);
+   bool bull_bos = bull_fvg && (cls > g_last_ph) && (g_last_ph_time != g_marked_ph_time);
+   bool bear_bos = bear_fvg && (cls < g_last_pl) && (g_last_pl_time != g_marked_pl_time);
 
-   // 2. If BOS happens, find the Base and set to Pending State
+   // 2. If BOS happens, find the Bases and set to Pending State
    if(bull_bos && !g_pending_demand_active)
      {
-      int base = FindDemandBase(shift);
-      if(base != -1)
+      g_marked_ph_time = g_last_ph_time;
+      int origin=-1, decisional=-1;
+      FindDemandBases(shift, g_last_pl_time, origin, decisional);
+      if(origin != -1 || decisional != -1)
         {
          g_pending_demand_active = true;
-         g_pending_demand_base_idx = base;
+         g_pending_demand_origin_idx = origin;
+         g_pending_demand_decisional_idx = (origin != decisional) ? decisional : -1;
          g_pending_demand_origin_low = g_last_pl; // This is the origin of the move
-         DrawBaseZone(iTime(_Symbol,_Period,base), iHigh(_Symbol,_Period,base), iLow(_Symbol,_Period,base), true);
+         
+         if(origin != -1) DrawBaseZone(iTime(_Symbol,_Period,origin), iHigh(_Symbol,_Period,origin), iLow(_Symbol,_Period,origin), true);
+         if(g_pending_demand_decisional_idx != -1) DrawBaseZone(iTime(_Symbol,_Period,decisional), iHigh(_Symbol,_Period,decisional), iLow(_Symbol,_Period,decisional), true);
         }
      }
 
    if(bear_bos && !g_pending_supply_active)
      {
-      int base = FindSupplyBase(shift);
-      if(base != -1)
+      g_marked_pl_time = g_last_pl_time;
+      int origin=-1, decisional=-1;
+      FindSupplyBases(shift, g_last_ph_time, origin, decisional);
+      if(origin != -1 || decisional != -1)
         {
          g_pending_supply_active = true;
-         g_pending_supply_base_idx = base;
+         g_pending_supply_origin_idx = origin;
+         g_pending_supply_decisional_idx = (origin != decisional) ? decisional : -1;
          g_pending_supply_origin_high = g_last_ph; // This is the origin of the move
-         DrawBaseZone(iTime(_Symbol,_Period,base), iHigh(_Symbol,_Period,base), iLow(_Symbol,_Period,base), false);
+         
+         if(origin != -1) DrawBaseZone(iTime(_Symbol,_Period,origin), iHigh(_Symbol,_Period,origin), iLow(_Symbol,_Period,origin), false);
+         if(g_pending_supply_decisional_idx != -1) DrawBaseZone(iTime(_Symbol,_Period,decisional), iHigh(_Symbol,_Period,decisional), iLow(_Symbol,_Period,decisional), false);
         }
      }
 
    // 3. Wait for new Pivot to form & Draw Fibo & Validate
-   if(g_pending_demand_active && ph > 0 && g_last_ph_time > iTime(_Symbol,_Period,g_pending_demand_base_idx))
+   if(g_pending_demand_active && ph > 0 && g_last_ph_time > g_marked_ph_time)
      {
       // New Pivot High formed AFTER our base. TIME TO DRAW FIBO!
-      double baseTop = iHigh(_Symbol,_Period,g_pending_demand_base_idx);
-      double baseBtm = iLow(_Symbol,_Period,g_pending_demand_base_idx);
-      
-      // Fibo drawn from Origin Low to New Pivot High
       double dist = g_last_ph - g_pending_demand_origin_low; 
-      double f382 = g_pending_demand_origin_low + dist * 0.382;
-      double f618 = g_pending_demand_origin_low + dist * 0.618;
+      double limit_upper = g_last_ph - dist * 0.382;
+      double limit_lower = g_last_ph - dist * 0.618;
       
-      // Validation: Is base inside the 38.2 - 61.8 Golden Zone?
-      if(baseTop >= f382 && baseBtm <= f618)
+      // Check Origin Base
+      if(g_pending_demand_origin_idx != -1)
         {
-         datetime baseTime = iTime(_Symbol, _Period, g_pending_demand_base_idx);
-         ExecuteAutoTrade(true, baseTop, baseBtm, baseTime);
+         double baseTop = iHigh(_Symbol,_Period,g_pending_demand_origin_idx);
+         double baseBtm = iLow(_Symbol,_Period,g_pending_demand_origin_idx);
+         if(baseTop >= limit_lower && baseBtm <= limit_upper)
+            ExecuteAutoTrade(true, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_demand_origin_idx));
         }
+
+      // Check Decisional Base
+      if(g_pending_demand_decisional_idx != -1)
+        {
+         double baseTop = iHigh(_Symbol,_Period,g_pending_demand_decisional_idx);
+         double baseBtm = iLow(_Symbol,_Period,g_pending_demand_decisional_idx);
+         if(baseTop >= limit_lower && baseBtm <= limit_upper)
+            ExecuteAutoTrade(true, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_demand_decisional_idx));
+        }
+      
       // Regardless of validation, reset the state because a cycle is finished
       g_pending_demand_active = false;
      }
 
-   if(g_pending_supply_active && pl > 0 && g_last_pl_time > iTime(_Symbol,_Period,g_pending_supply_base_idx))
+   if(g_pending_supply_active && pl > 0 && g_last_pl_time > g_marked_pl_time)
      {
       // New Pivot Low formed AFTER our base. TIME TO DRAW FIBO!
-      double baseTop = iHigh(_Symbol,_Period,g_pending_supply_base_idx);
-      double baseBtm = iLow(_Symbol,_Period,g_pending_supply_base_idx);
-      
-      // Fibo drawn from Origin High to New Pivot Low
       double dist = g_pending_supply_origin_high - g_last_pl;
-      double f382 = g_pending_supply_origin_high - dist * 0.382;
-      double f618 = g_pending_supply_origin_high - dist * 0.618;
+      double limit_upper = g_last_pl + dist * 0.618;
+      double limit_lower = g_last_pl + dist * 0.382;
       
-      // Validation: Is base inside the 38.2 - 61.8 Golden Zone?
-      if(baseTop >= f618 && baseBtm <= f382)
+      // Check Origin Base
+      if(g_pending_supply_origin_idx != -1)
         {
-         datetime baseTime = iTime(_Symbol, _Period, g_pending_supply_base_idx);
-         ExecuteAutoTrade(false, baseTop, baseBtm, baseTime);
+         double baseTop = iHigh(_Symbol,_Period,g_pending_supply_origin_idx);
+         double baseBtm = iLow(_Symbol,_Period,g_pending_supply_origin_idx);
+         if(baseTop >= limit_lower && baseBtm <= limit_upper)
+            ExecuteAutoTrade(false, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_supply_origin_idx));
         }
+
+      // Check Decisional Base
+      if(g_pending_supply_decisional_idx != -1)
+        {
+         double baseTop = iHigh(_Symbol,_Period,g_pending_supply_decisional_idx);
+         double baseBtm = iLow(_Symbol,_Period,g_pending_supply_decisional_idx);
+         if(baseTop >= limit_lower && baseBtm <= limit_upper)
+            ExecuteAutoTrade(false, baseTop, baseBtm, iTime(_Symbol, _Period, g_pending_supply_decisional_idx));
+        }
+      
       // Regardless of validation, reset the state
       g_pending_supply_active = false;
      }
