@@ -60,26 +60,31 @@
     </div>
 
     {{-- Header title for overview --}}
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <h2 class="text-lg font-bold text-slate-900 tracking-tight">Overview</h2>
-        <div class="flex gap-2">
-            <button
-                class="bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
-                01 Oct 2025 - 31 Oct 2025
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                </svg>
-            </button>
-            <button
-                class="bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
-                Last 30 days
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                </svg>
-            </button>
-        </div>
+        <form method="GET" action="{{ route('dashboard') }}" class="flex gap-2 items-center">
+            @if (request('filter'))
+                <input type="hidden" name="filter" value="{{ request('filter') }}">
+            @endif
+            <div class="relative">
+                <select name="date_filter" onchange="this.form.submit()"
+                    class="appearance-none bg-white border border-slate-200 text-slate-700 text-[12px] font-semibold px-4 py-2 pr-9 rounded-xl hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer">
+                    <option value="today" {{ $dateFilter === 'today' ? 'selected' : '' }}>Today</option>
+                    <option value="last_7_days" {{ $dateFilter === 'last_7_days' ? 'selected' : '' }}>Last 7 Days</option>
+                    <option value="last_30_days" {{ $dateFilter === 'last_30_days' ? 'selected' : '' }}>Last 30 Days
+                    </option>
+                    <option value="this_month" {{ $dateFilter === 'this_month' ? 'selected' : '' }}>This Month</option>
+                    <option value="last_month" {{ $dateFilter === 'last_month' ? 'selected' : '' }}>Last Month</option>
+                    <option value="this_year" {{ $dateFilter === 'this_year' ? 'selected' : '' }}>This Year</option>
+                    <option value="all_time" {{ $dateFilter === 'all_time' ? 'selected' : '' }}>All Time</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </div>
+            </div>
+        </form>
     </div>
 
     {{-- Modern Stat Cards --}}
@@ -179,15 +184,15 @@
 
     {{-- Tabs --}}
     <div class="flex gap-6 border-b border-slate-200 mb-6 text-sm font-semibold text-slate-500">
-        <a href="{{ route('dashboard', ['filter' => 'all']) }}"
+        <a href="{{ route('dashboard', ['filter' => 'all', 'date_filter' => $dateFilter]) }}"
             class="pb-3 border-b-2 {{ $filter === 'all' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
             All trades
         </a>
-        <a href="{{ route('dashboard', ['filter' => 'completed']) }}"
+        <a href="{{ route('dashboard', ['filter' => 'completed', 'date_filter' => $dateFilter]) }}"
             class="pb-3 border-b-2 {{ $filter === 'completed' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
             Completed
         </a>
-        <a href="{{ route('dashboard', ['filter' => 'cancelled']) }}"
+        <a href="{{ route('dashboard', ['filter' => 'cancelled', 'date_filter' => $dateFilter]) }}"
             class="pb-3 border-b-2 {{ $filter === 'cancelled' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
             Cancelled
         </a>

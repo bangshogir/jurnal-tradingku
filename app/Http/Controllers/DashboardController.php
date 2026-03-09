@@ -12,8 +12,51 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $filter = $request->query('filter', 'all');
+        $dateFilter = $request->query('date_filter', 'all_time');
+
+        // Reusable date filter closure
+        $applyDateFilter = function ($q) use ($dateFilter) {
+            if ($dateFilter === 'all_time') return;
+
+            $now = \Carbon\Carbon::now();
+            $q->where(function ($query) use ($now, $dateFilter) {
+                if ($dateFilter === 'today') {
+                    $query->whereDate('close_time', $now->toDateString())
+                        ->orWhere(function ($sub) use ($now) {
+                            $sub->whereNull('close_time')->whereDate('created_at', $now->toDateString());
+                        });
+                } elseif ($dateFilter === 'last_7_days') {
+                    $query->where('close_time', '>=', $now->copy()->subDays(7))
+                        ->orWhere(function ($sub) use ($now) {
+                            $sub->whereNull('close_time')->where('created_at', '>=', $now->copy()->subDays(7));
+                        });
+                } elseif ($dateFilter === 'last_30_days') {
+                    $query->where('close_time', '>=', $now->copy()->subDays(30))
+                        ->orWhere(function ($sub) use ($now) {
+                            $sub->whereNull('close_time')->where('created_at', '>=', $now->copy()->subDays(30));
+                        });
+                } elseif ($dateFilter === 'this_month') {
+                    $query->whereMonth('close_time', $now->month)->whereYear('close_time', $now->year)
+                        ->orWhere(function ($sub) use ($now) {
+                            $sub->whereNull('close_time')->whereMonth('created_at', $now->month)->whereYear('created_at', $now->year);
+                        });
+                } elseif ($dateFilter === 'last_month') {
+                    $lastMonth = $now->copy()->subMonth();
+                    $query->whereMonth('close_time', $lastMonth->month)->whereYear('close_time', $lastMonth->year)
+                        ->orWhere(function ($sub) use ($lastMonth) {
+                            $sub->whereNull('close_time')->whereMonth('created_at', $lastMonth->month)->whereYear('created_at', $lastMonth->year);
+                        });
+                } elseif ($dateFilter === 'this_year') {
+                    $query->whereYear('close_time', $now->year)
+                        ->orWhere(function ($sub) use ($now) {
+                            $sub->whereNull('close_time')->whereYear('created_at', $now->year);
+                        });
+                }
+            });
+        };
 
         $query = TradingLog::where('user_id', Auth::id());
+        $applyDateFilter($query);
 
         if ($filter === 'completed') {
             $query->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed']);
@@ -28,10 +71,11 @@ class DashboardController extends Controller
         // 2. Paginate
         $trades = $query->orderByRaw('COALESCE(close_time, created_at) DESC')->paginate(10)->withQueryString();
 
-        // Calculate statistics
-        $allTrades = TradingLog::where('user_id', Auth::id())
-            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
-            ->get();
+        // Calculate statistics based on all completed trades within the date filter
+        $allTradesQuery = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed']);
+        $applyDateFilter($allTradesQuery);
+        $allTrades = $allTradesQuery->get();
 
         // Calculate statistics based on all completed trades
         $totalTrades = $allTrades->count();
@@ -64,7 +108,8 @@ class DashboardController extends Controller
             'todayTradesCount',
             'todayProfit',
             'currentBalance',
-            'filter'
+            'filter',
+            'dateFilter'
         ));
     }
 
