@@ -179,11 +179,18 @@
 
     {{-- Tabs --}}
     <div class="flex gap-6 border-b border-slate-200 mb-6 text-sm font-semibold text-slate-500">
-        <button class="pb-3 border-b-2 border-brand-600 text-brand-600">All trades</button>
-        <button
-            class="pb-3 border-b-2 border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors">Completed</button>
-        <button
-            class="pb-3 border-b-2 border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors">Cancelled</button>
+        <a href="{{ route('dashboard', ['filter' => 'all']) }}"
+            class="pb-3 border-b-2 {{ $filter === 'all' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
+            All trades
+        </a>
+        <a href="{{ route('dashboard', ['filter' => 'completed']) }}"
+            class="pb-3 border-b-2 {{ $filter === 'completed' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
+            Completed
+        </a>
+        <a href="{{ route('dashboard', ['filter' => 'cancelled']) }}"
+            class="pb-3 border-b-2 {{ $filter === 'cancelled' ? 'border-brand-600 text-brand-600' : 'border-transparent hover:text-slate-800 hover:border-slate-300 transition-colors' }}">
+            Cancelled
+        </a>
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -285,6 +292,12 @@
                 </tbody>
             </table>
         </div>
+
+        @if ($trades->hasPages())
+            <div class="px-6 py-4 border-t border-slate-100 bg-white">
+                {{ $trades->links('pagination::tailwind') }}
+            </div>
+        @endif
     </div>
 
 @endsection

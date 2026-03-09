@@ -9,27 +9,43 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // Get all closed trades ordered by newest first, strictly constrained to the logged in user
-        $trades = TradingLog::where('user_id', '=', Auth::id())
-            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $filter = $request->query('filter', 'all');
+
+        $query = TradingLog::where('user_id', Auth::id());
+
+        if ($filter === 'completed') {
+            $query->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed']);
+        } elseif ($filter === 'cancelled') {
+            $query->where('type', 'pending_cancel');
+        } else {
+            // 'all' includes both completed and cancelled history
+            $query->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed', 'pending_cancel']);
+        }
+
+        // 1. Sort by newest date (close_time first, fallback created_at)
+        // 2. Paginate
+        $trades = $query->orderByRaw('COALESCE(close_time, created_at) DESC')->paginate(10)->withQueryString();
 
         // Calculate statistics
-        $totalTrades = $trades->count();
-        $totalProfit = $trades->sum('profit_loss');
+        $allTrades = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
+            ->get();
+
+        // Calculate statistics based on all completed trades
+        $totalTrades = $allTrades->count();
+        $totalProfit = $allTrades->sum('profit_loss');
         
         // Calculate Win Rate based on positive profit_loss
-        $winningTrades = $trades->where('profit_loss', '>', 0)->count();
+        $winningTrades = $allTrades->where('profit_loss', '>', 0)->count();
         $winRate = $totalTrades > 0 ? round(($winningTrades / $totalTrades) * 100, 2) : 0;
         
         // Today calculations
         $todayStart = \Carbon\Carbon::today();
         
         // Trades closed today (using close_time from MT5 if available, fallback to created_at)
-        $todayTradesList = $trades->filter(function($trade) use ($todayStart) {
+        $todayTradesList = $allTrades->filter(function($trade) use ($todayStart) {
             $dateToUse = $trade->close_time ? $trade->close_time : $trade->created_at;
             return $dateToUse >= $todayStart;
         });
@@ -47,7 +63,8 @@ class DashboardController extends Controller
             'winRate',
             'todayTradesCount',
             'todayProfit',
-            'currentBalance'
+            'currentBalance',
+            'filter'
         ));
     }
 
