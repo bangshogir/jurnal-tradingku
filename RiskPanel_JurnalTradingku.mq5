@@ -25,6 +25,10 @@ input string  InpWebhookURL = "http://jurnaltradingku.my.id/api/webhook/trading-
 input string  InpWebhookToken = "";                                                   // Webhook API Token
 input int     InpResyncDays = 7;                                                      // Auto Resync History (Days)
 
+input group "=== Auto Close Friday ==="
+input bool    InpEnableAutoCloseFriday = false; // Enable Auto Close Friday
+input int     InpAutoCloseMinutesBefore = 15;   // Minutes before market close
+
 //=====================================================================
 // [2] LOT CALCULATION
 //=====================================================================
@@ -64,6 +68,65 @@ void CheckCutLoss()
       bool is_buy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
       bool do_cut = is_buy ? (cls < cut) : (cls > cut);
       if(do_cut) ExtTrade.PositionClose(ticket, 10);
+     }
+  }
+
+//=====================================================================
+// [3.5] AUTO CLOSE FRIDAY MONITOR
+//=====================================================================
+void CheckAutoCloseFriday()
+  {
+   if(!InpEnableAutoCloseFriday) return;
+   
+   MqlDateTime tm;
+   TimeCurrent(tm);
+   if(tm.day_of_week != 5) return; // FRIDAY ONLY
+   
+   static int last_day = -1;
+   static uint friday_close_sec = 86399; // Default 23:59:59
+   if(last_day != tm.day)
+     {
+      datetime from, to;
+      uint last_close = 0;
+      for(int i=0; i<5; i++)
+        {
+         if(SymbolInfoSessionTrade(_Symbol, FRIDAY, i, from, to))
+           {
+            if((uint)to > last_close) last_close = (uint)to;
+           }
+         else break;
+        }
+      if(last_close > 0) friday_close_sec = last_close;
+      last_day = tm.day;
+     }
+     
+   uint current_sec = tm.hour * 3600 + tm.min * 60 + tm.sec;
+   uint trigger_sec = friday_close_sec - (InpAutoCloseMinutesBefore * 60);
+   
+   if(current_sec >= trigger_sec && current_sec < friday_close_sec)
+     {
+      bool actionsTaken = false;
+      int posTotal = PositionsTotal();
+      for(int i = posTotal - 1; i >= 0; i--)
+        {
+         ulong ticket = PositionGetTicket(i);
+         if(PositionGetString(POSITION_SYMBOL) == _Symbol)
+           {
+            ExtTrade.PositionClose(ticket);
+            actionsTaken = true;
+           }
+        }
+      int ordersTotal = OrdersTotal();
+      for(int i = ordersTotal - 1; i >= 0; i--)
+        {
+         ulong ticket = OrderGetTicket(i);
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol)
+           {
+            ExtTrade.OrderDelete(ticket);
+            actionsTaken = true;
+           }
+        }
+      if(actionsTaken) Print("Auto Close Friday triggered at: ", TimeCurrent());
      }
   }
 
@@ -584,6 +647,8 @@ void OnTick()
    ExtPanel.UpdateStats();
    datetime cur = iTime(_Symbol, _Period, 0);
    if(cur != g_last_bar) { g_last_bar = cur; CheckCutLoss(); }
+   
+   CheckAutoCloseFriday();
   }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans,
