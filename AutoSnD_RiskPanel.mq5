@@ -85,6 +85,8 @@ double   g_fibo_origin_bullish = 0; // Swing Low origin of Bullish BOS move
 double   g_fibo_origin_bearish = 0; // Swing High origin of Bearish BOS move
 datetime g_fibo_origin_bull_time = 0;
 datetime g_fibo_origin_bear_time = 0;
+bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bull BOS
+bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
 
 // Array to prevent duplicate pending orders on the same zone
 datetime g_traded_zones[];
@@ -638,9 +640,10 @@ void ProcessBar(int shift)
       if(base!=-1)
         {
          DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
-         // Record fibo origin: from Swing Low before BOS to next Pivot High
+         // Record fibo origin: Swing Low before BOS → will wait for new Pivot High
          g_fibo_origin_bullish  = g_last_pl;
          g_fibo_origin_bull_time = g_last_pl_time;
+         g_fibo_bull_pending = true;
         }
      }
 
@@ -652,24 +655,47 @@ void ProcessBar(int shift)
       if(base!=-1)
         {
          DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
-         // Record fibo origin: from Swing High before BOS to next Pivot Low
+         // Record fibo origin: Swing High before BOS → will wait for new Pivot Low
          g_fibo_origin_bearish  = g_last_ph;
          g_fibo_origin_bear_time = g_last_ph_time;
+         g_fibo_bear_pending = true;
         }
      }
 
-   // Every new Pivot, check if any zone is in the current Fibo Golden Zone
-   if(ph > 0 && g_fibo_origin_bullish > 0 && g_last_ph_time > g_fibo_origin_bull_time)
+   // --- Fibo: After BOS, wait for NEW pivot confirmed by 2 reversal candles ---
+   // For Bullish BOS: wait for new Pivot HIGH, confirmed by 2 bearish candles after it
+   if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
-      // New Pivot High confirmed after Bullish BOS: Fibo from origin_low to new PH
-      // Use the time of the origin_low as the start for Fibo line drawing
-      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time);
+      // Check 2 reversal candles (bearish closes) after the pivot bar
+      int pivot_bar = shift + InpPivotLB; // The bar index of the pivot
+      bool confirmed = true;
+      for(int c = pivot_bar - 1; c >= MathMax(pivot_bar - 2, shift); c--)
+        {
+         if(iClose(_Symbol,_Period,c) >= iOpen(_Symbol,_Period,c)) { confirmed = false; break; }
+        }
+      if(confirmed)
+        {
+         // Draw Fibo from Swing Low (origin) to new Pivot High
+         CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time);
+         g_fibo_bull_pending = false; // This BOS cycle is done
+        }
      }
 
-   if(pl > 0 && g_fibo_origin_bearish > 0 && g_last_pl_time > g_fibo_origin_bear_time)
+   // For Bearish BOS: wait for new Pivot LOW, confirmed by 2 bullish candles after it
+   if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
-      // New Pivot Low confirmed after Bearish BOS: Fibo from new PL to origin_high
-      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time);
+      int pivot_bar = shift + InpPivotLB;
+      bool confirmed = true;
+      for(int c = pivot_bar - 1; c >= MathMax(pivot_bar - 2, shift); c--)
+        {
+         if(iClose(_Symbol,_Period,c) <= iOpen(_Symbol,_Period,c)) { confirmed = false; break; }
+        }
+      if(confirmed)
+        {
+         // Draw Fibo from new Pivot Low to Swing High (origin)
+         CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time);
+         g_fibo_bear_pending = false; // This BOS cycle is done
+        }
      }
 
    CheckMitigation(shift);
