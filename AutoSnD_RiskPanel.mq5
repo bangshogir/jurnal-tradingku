@@ -39,7 +39,7 @@ input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
 input bool   InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
-input color  InpMitColor       = clrYellow;    // Warna Border Zona Termitigasi
+input color  InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
@@ -445,8 +445,8 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
      { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
    string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT," "+DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT," "+DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)+" "); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_RIGHT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)+" "); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true; g_zones[g_zone_count].has_idm=false; g_zones[g_zone_count].is_ultra=false;
@@ -466,26 +466,23 @@ void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
 void MitigateZone(int idx, datetime t)
   {
    g_zones[idx].active=false;
+   
+   // Always delete text labels for mitigated zones
+   ObjectDelete(0,g_zones[idx].lbl_name); 
+   ObjectDelete(0,g_zones[idx].lbl_top); 
+   ObjectDelete(0,g_zones[idx].lbl_btm);
+   
    if(InpShowMitigated)
      {
       // Cap the rectangle at the mitigation time
       ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
-      
-      // Change styling to yellow border, transparent background
+      // Change styling to background color, transparent background
       ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);
       ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false); // Transparent background
-      
-      // Change label colors
-      ObjectSetInteger(0,g_zones[idx].lbl_name,OBJPROP_COLOR,InpMitColor);
-      ObjectSetInteger(0,g_zones[idx].lbl_top,OBJPROP_COLOR,InpMitColor);
-      ObjectSetInteger(0,g_zones[idx].lbl_btm,OBJPROP_COLOR,InpMitColor);
      }
    else
      {
       ObjectDelete(0,g_zones[idx].rect_name); 
-      ObjectDelete(0,g_zones[idx].lbl_name); 
-      ObjectDelete(0,g_zones[idx].lbl_top); 
-      ObjectDelete(0,g_zones[idx].lbl_btm);
      }
   }
 
