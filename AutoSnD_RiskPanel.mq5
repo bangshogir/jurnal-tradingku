@@ -540,33 +540,37 @@ void DrawFiboLines(double f382, double f618, datetime from_time)
    string name618 = "SnD_F618_" + uid;
    color fibo_col = clrMagenta;
    
-   if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, D'2099.12.31', f382))
+   // Line spans ~20 candles from from_time
+   int bar_from = iBarShift(_Symbol, _Period, from_time);
+   int bar_end  = MathMax(bar_from - 20, 0);
+   datetime end_time = iTime(_Symbol, _Period, bar_end);
+   
+   if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, end_time, f382))
      {
       ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col);
       ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
       ObjectSetInteger(0, name382, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, true);
+      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, false);
       ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, name382, OBJPROP_BACK, true);
       ObjectSetString(0, name382, OBJPROP_TOOLTIP, "Fibo 38.2%: " + DoubleToString(f382, _Digits));
-      // Add price label
       string lbl382 = "SnD_FL382_" + uid;
-      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, from_time, f382))
-        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2  "+DoubleToString(f382,_Digits)); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
+      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, end_time, f382))
+        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2"); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
      }
    
-   if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, D'2099.12.31', f618))
+   if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, end_time, f618))
      {
       ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col);
       ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
       ObjectSetInteger(0, name618, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, true);
+      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, false);
       ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, name618, OBJPROP_BACK, true);
       ObjectSetString(0, name618, OBJPROP_TOOLTIP, "Fibo 61.8%: " + DoubleToString(f618, _Digits));
       string lbl618 = "SnD_FL618_" + uid;
-      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, from_time, f618))
-        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8  "+DoubleToString(f618,_Digits)); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
+      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, end_time, f618))
+        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8"); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
      }
   }
 
