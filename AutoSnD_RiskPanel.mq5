@@ -609,6 +609,7 @@ void ProcessBar(int shift)
      {
       datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
       g_last_ph=ph; g_last_ph_time=t;
+     }
 
    double pl=GetPivotLow(InpPivotLB,shift);
    if(pl>0)
