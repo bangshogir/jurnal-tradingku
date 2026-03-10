@@ -657,40 +657,20 @@ void ProcessBar(int shift)
         }
      }
 
-   // --- Fibo: Wait for Pivot confirmed by 2 reversal candles ---
+   // --- Fibo: Wait for Pivot confirmed by InpPivotLB bars ---
    // We DO NOT set pending = false here. If a minor pivot doesn't overlap the zone,
    // it will just ignore it and evaluate the next confirmed pivot later, until a trade hits.
    
    if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
-      int pivot_bar = shift + InpPivotLB;
-      bool confirmed = true;
-      for(int c = pivot_bar - 1; c >= MathMax(pivot_bar - 2, shift); c--)
-        {
-         // Bullish BOS -> we need Pivot High -> Reversal must be BEARISH (Close < Open)
-         if(iClose(_Symbol,_Period,c) >= iOpen(_Symbol,_Period,c)) { confirmed = false; break; }
-        }
-      
-      if(confirmed)
-        {
-         CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
-        }
+      // GetPivotHigh ensures InpPivotLB (5) bars have closed lower, naturally confirming the pivot.
+      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
      }
 
    if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
-      int pivot_bar = shift + InpPivotLB;
-      bool confirmed = true;
-      for(int c = pivot_bar - 1; c >= MathMax(pivot_bar - 2, shift); c--)
-        {
-         // Bearish BOS -> we need Pivot Low -> Reversal must be BULLISH (Close > Open)
-         if(iClose(_Symbol,_Period,c) <= iOpen(_Symbol,_Period,c)) { confirmed = false; break; }
-        }
-        
-      if(confirmed)
-        {
-         CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
-        }
+      // GetPivotLow ensures InpPivotLB (5) bars have closed higher, naturally confirming the pivot.
+      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
      }
 
    CheckMitigation(shift);
