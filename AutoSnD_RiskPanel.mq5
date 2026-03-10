@@ -87,6 +87,8 @@ datetime g_fibo_origin_bull_time = 0;
 datetime g_fibo_origin_bear_time = 0;
 bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bull BOS
 bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
+int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
+int      g_pending_bear_zone_idx = -1; // Exact zone index created by latest Bear BOS
 
 // Array to prevent duplicate pending orders on the same zone
 datetime g_traded_zones[];
@@ -576,36 +578,25 @@ void DrawFiboLines(double f382, double f618, datetime from_time)
      }
   }
 
-// ---- Fibo Filter: Check all active zones vs current Fibo grid ----
-void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, datetime origin_time)
+// ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
+void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
   {
+   if(zone_idx < 0 || zone_idx >= g_zone_count) return;
+   if(!g_zones[zone_idx].active) return;
+   if(IsZoneTraded(g_zones[zone_idx].start_time)) return;
+
    // Golden Zone boundaries
-   double dist     = fibo_high - fibo_low;
-   double f_upper  = fibo_high - dist * 0.382;
-   double f_lower  = fibo_high - dist * 0.618;
+   double dist    = fibo_high - fibo_low;
+   double f_upper = fibo_high - dist * 0.382; // 38.2 level
+   double f_lower = fibo_high - dist * 0.618; // 61.8 level
 
-   bool any_valid = false;
-   for(int i=0;i<g_zone_count;i++)
-     {
-      if(!g_zones[i].active) continue;
-      if(IsZoneTraded(g_zones[i].start_time)) continue;
-      // Only zones that belong to the SAME BOS cycle (formed at or after the origin swing)
-      if(g_zones[i].start_time < origin_time) continue;
+   // Check if the zone overlaps the Golden Zone
+   bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
+   if(!overlaps) return;
 
-      // Check if the zone overlaps (touches or is inside) the Golden Zone
-      bool overlaps = (g_zones[i].top >= f_lower) && (g_zones[i].btm <= f_upper);
-      if(!overlaps) continue;
-
-      // Draw Fibo lines only once when the first overlapping zone is found
-      if(!any_valid)
-        {
-         DrawFiboLines(f_upper, f_lower, from_time);
-         any_valid = true;
-        }
-
-      // Execute Demand or Supply
-      ExecuteAutoTrade(g_zones[i].is_demand, g_zones[i].top, g_zones[i].btm, g_zones[i].start_time);
-     }
+   // Zone IS in the Golden Zone — draw Fibo lines and execute
+   DrawFiboLines(f_upper, f_lower, from_time);
+   ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
   }
 
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
@@ -642,6 +633,7 @@ void ProcessBar(int shift)
       if(base!=-1)
         {
          DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+         g_pending_bull_zone_idx = g_zone_count - 1; // Track exact zone index
          // Record fibo origin: Swing Low before BOS → will wait for new Pivot High
          g_fibo_origin_bullish  = g_last_pl;
          g_fibo_origin_bull_time = g_last_pl_time;
@@ -657,6 +649,7 @@ void ProcessBar(int shift)
       if(base!=-1)
         {
          DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+         g_pending_bear_zone_idx = g_zone_count - 1; // Track exact zone index
          // Record fibo origin: Swing High before BOS → will wait for new Pivot Low
          g_fibo_origin_bearish  = g_last_ph;
          g_fibo_origin_bear_time = g_last_ph_time;
@@ -664,20 +657,21 @@ void ProcessBar(int shift)
         }
      }
 
-   // --- Fibo: After BOS, fire on the first new confirmed pivot (GetPivotHigh/Low already
-   // guarantees InpPivotLB bars on each side = solid confirmation) ---
+   // --- Fibo: Fire on first new pivot after BOS ---
    if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
-      // New Pivot High after Bullish BOS: Fibo from Swing Low (origin) to new Pivot High
-      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_fibo_origin_bull_time);
+      // Fibo from Swing Low (origin) to new Pivot High — only check the zone from THIS BOS
+      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
       g_fibo_bull_pending = false;
+      g_pending_bull_zone_idx = -1;
      }
 
    if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
-      // New Pivot Low after Bearish BOS: Fibo from new Pivot Low to Swing High (origin)
-      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_fibo_origin_bear_time);
+      // Fibo from new Pivot Low to Swing High (origin) — only check the zone from THIS BOS
+      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
       g_fibo_bear_pending = false;
+      g_pending_bear_zone_idx = -1;
      }
 
    CheckMitigation(shift);
