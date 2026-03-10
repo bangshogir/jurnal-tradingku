@@ -34,6 +34,7 @@ input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
 input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
 input int     InpOriginLookback = 50;    // Traceback max candle base
 input double  InpBufferPoints   = 20.0;    // Jarak Buffer SL (Points)
+input int     InpHistoryBars    = 600;     // Jumlah Bar Histori Discan
 input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
