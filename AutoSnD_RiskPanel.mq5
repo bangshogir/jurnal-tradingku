@@ -38,7 +38,8 @@ input int     InpHistoryBars    = 600;     // Jumlah Bar Histori Discan
 input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
-input color  InpMitColor       = clrGray;       // Warna Zona Termitigasi
+input bool   InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
+input color  InpMitColor       = clrYellow;    // Warna Border Zona Termitigasi
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
@@ -465,7 +466,27 @@ void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
 void MitigateZone(int idx, datetime t)
   {
    g_zones[idx].active=false;
-   ObjectDelete(0,g_zones[idx].rect_name); ObjectDelete(0,g_zones[idx].lbl_name); ObjectDelete(0,g_zones[idx].lbl_top); ObjectDelete(0,g_zones[idx].lbl_btm);
+   if(InpShowMitigated)
+     {
+      // Cap the rectangle at the mitigation time
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
+      
+      // Change styling to yellow border, transparent background
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false); // Transparent background
+      
+      // Change label colors
+      ObjectSetInteger(0,g_zones[idx].lbl_name,OBJPROP_COLOR,InpMitColor);
+      ObjectSetInteger(0,g_zones[idx].lbl_top,OBJPROP_COLOR,InpMitColor);
+      ObjectSetInteger(0,g_zones[idx].lbl_btm,OBJPROP_COLOR,InpMitColor);
+     }
+   else
+     {
+      ObjectDelete(0,g_zones[idx].rect_name); 
+      ObjectDelete(0,g_zones[idx].lbl_name); 
+      ObjectDelete(0,g_zones[idx].lbl_top); 
+      ObjectDelete(0,g_zones[idx].lbl_btm);
+     }
   }
 
 void UpdateZoneLabelsTime(datetime t)
