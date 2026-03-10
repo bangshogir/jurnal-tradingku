@@ -85,6 +85,8 @@ double   g_fibo_origin_bullish = 0; // Swing Low origin of Bullish BOS move
 double   g_fibo_origin_bearish = 0; // Swing High origin of Bearish BOS move
 datetime g_fibo_origin_bull_time = 0;
 datetime g_fibo_origin_bear_time = 0;
+double   g_fibo_extreme_bullish = 0; // Highest high reached since Bullish BOS
+double   g_fibo_extreme_bearish = 0; // Lowest low reached since Bearish BOS
 bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bull BOS
 bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
 int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
@@ -590,7 +592,7 @@ void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, in
    double f_upper = fibo_high - dist * 0.382; // 38.2 level
    double f_lower = fibo_high - dist * 0.618; // 61.8 level
 
-   // Check if the zone overlaps the Golden Zone
+   // Check if the base overlaps the Golden Zone
    bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
    if(!overlaps) return;
 
@@ -634,9 +636,10 @@ void ProcessBar(int shift)
         {
          DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
          g_pending_bull_zone_idx = g_zone_count - 1; // Track exact zone index
-         // Record fibo origin: Swing Low before BOS → will wait for new Pivot High
+         // Record fibo origin: Swing Low before BOS → track Highest High dynamically
          g_fibo_origin_bullish  = g_last_pl;
          g_fibo_origin_bull_time = g_last_pl_time;
+         g_fibo_extreme_bullish = iHigh(_Symbol,_Period,shift); // Initialize extreme
          g_fibo_bull_pending = true;
         }
      }
@@ -650,28 +653,52 @@ void ProcessBar(int shift)
         {
          DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
          g_pending_bear_zone_idx = g_zone_count - 1; // Track exact zone index
-         // Record fibo origin: Swing High before BOS → will wait for new Pivot Low
+         // Record fibo origin: Swing High before BOS → track Lowest Low dynamically
          g_fibo_origin_bearish  = g_last_ph;
          g_fibo_origin_bear_time = g_last_ph_time;
+         g_fibo_extreme_bearish = iLow(_Symbol,_Period,shift); // Initialize extreme
          g_fibo_bear_pending = true;
         }
      }
 
-   // --- Fibo: Fire on first new pivot after BOS ---
-   if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
+   // --- Dynamic Fibo: Track Extreme, Execute on Retracement to 38.2 ---
+   
+   if(g_fibo_bull_pending)
      {
-      // Fibo from Swing Low (origin) to new Pivot High — only check the zone from THIS BOS
-      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
-      g_fibo_bull_pending = false;
-      g_pending_bull_zone_idx = -1;
+      double cur_high = iHigh(_Symbol,_Period,shift);
+      double cur_low  = iLow(_Symbol,_Period,shift);
+      // Extend the Fibo endpoint if price makes a new high
+      if(cur_high > g_fibo_extreme_bullish) g_fibo_extreme_bullish = cur_high;
+      
+      // Calculate dynamic 38.2 limit from origin to current extreme
+      double f382 = g_fibo_extreme_bullish - (g_fibo_extreme_bullish - g_fibo_origin_bullish) * 0.382;
+      
+      // If price retraces back down and hits the 38.2 level, the swing is confirmed!
+      if(cur_low <= f382 && g_fibo_extreme_bullish > g_fibo_origin_bullish)
+        {
+         CheckFiboAndTrade(g_fibo_origin_bullish, g_fibo_extreme_bullish, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
+         g_fibo_bull_pending = false;
+         g_pending_bull_zone_idx = -1;
+        }
      }
 
-   if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
+   if(g_fibo_bear_pending)
      {
-      // Fibo from new Pivot Low to Swing High (origin) — only check the zone from THIS BOS
-      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
-      g_fibo_bear_pending = false;
-      g_pending_bear_zone_idx = -1;
+      double cur_high = iHigh(_Symbol,_Period,shift);
+      double cur_low  = iLow(_Symbol,_Period,shift);
+      // Extend the Fibo endpoint if price makes a new low
+      if(cur_low < g_fibo_extreme_bearish) g_fibo_extreme_bearish = cur_low;
+      
+      // Calculate dynamic 38.2 limit from origin to current extreme
+      double f382 = g_fibo_extreme_bearish + (g_fibo_origin_bearish - g_fibo_extreme_bearish) * 0.382;
+      
+      // If price retraces back up and hits the 38.2 level, the swing is confirmed!
+      if(cur_high >= f382 && g_fibo_extreme_bearish < g_fibo_origin_bearish)
+        {
+         CheckFiboAndTrade(g_fibo_extreme_bearish, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
+         g_fibo_bear_pending = false;
+         g_pending_bear_zone_idx = -1;
+        }
      }
 
    CheckMitigation(shift);
