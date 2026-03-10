@@ -630,6 +630,11 @@ void ProcessBar(int shift)
      {
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(_Symbol,_Period,shift));
+      
+      // Force reset pending state for this new BOS cycle
+      g_fibo_bull_pending = false;
+      g_pending_bull_zone_idx = -1;
+      
       int base=FindDemandBase(shift);
       if(base!=-1)
         {
@@ -646,6 +651,11 @@ void ProcessBar(int shift)
      {
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(_Symbol,_Period,shift));
+      
+      // Force reset pending state for this new BOS cycle
+      g_fibo_bear_pending = false;
+      g_pending_bear_zone_idx = -1;
+      
       int base=FindSupplyBase(shift);
       if(base!=-1)
         {
