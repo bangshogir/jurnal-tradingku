@@ -579,11 +579,11 @@ void DrawFiboLines(double f382, double f618, datetime from_time)
   }
 
 // ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
-void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
+bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
   {
-   if(zone_idx < 0 || zone_idx >= g_zone_count) return;
-   if(!g_zones[zone_idx].active) return;
-   if(IsZoneTraded(g_zones[zone_idx].start_time)) return;
+   if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
+   if(!g_zones[zone_idx].active) return false;
+   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
 
    // Golden Zone boundaries
    double dist    = fibo_high - fibo_low;
@@ -592,11 +592,12 @@ void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, in
 
    // Check if the base overlaps the Golden Zone
    bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
-   if(!overlaps) return;
+   if(!overlaps) return false;
 
    // Zone IS in the Golden Zone — draw Fibo lines and execute
    DrawFiboLines(f_upper, f_lower, from_time);
    ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
+   return true;
   }
 
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
@@ -664,13 +665,21 @@ void ProcessBar(int shift)
    if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
       // GetPivotHigh ensures InpPivotLB (5) bars have closed lower, naturally confirming the pivot.
-      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx);
+      if(CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx))
+        {
+         g_fibo_bull_pending = false;
+         g_pending_bull_zone_idx = -1;
+        }
      }
 
    if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
       // GetPivotLow ensures InpPivotLB (5) bars have closed higher, naturally confirming the pivot.
-      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx);
+      if(CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx))
+        {
+         g_fibo_bear_pending = false;
+         g_pending_bear_zone_idx = -1;
+        }
      }
 
    CheckMitigation(shift);
