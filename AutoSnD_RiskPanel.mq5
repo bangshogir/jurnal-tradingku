@@ -531,14 +531,53 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
      }
   }
 
+// ---- Draw only Fibo 38.2 and 61.8 levels (only when a valid zone is found) ----
+void DrawFiboLines(double f382, double f618, datetime from_time)
+  {
+   string uid = NextID();
+   string name382 = "SnD_F382_" + uid;
+   string name618 = "SnD_F618_" + uid;
+   color fibo_col = clrMagenta;
+   
+   if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, D'2099.12.31', f382))
+     {
+      ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col);
+      ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, name382, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, true);
+      ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, name382, OBJPROP_BACK, true);
+      ObjectSetString(0, name382, OBJPROP_TOOLTIP, "Fibo 38.2%: " + DoubleToString(f382, _Digits));
+      // Add price label
+      string lbl382 = "SnD_FL382_" + uid;
+      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, from_time, f382))
+        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2  "+DoubleToString(f382,_Digits)); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
+     }
+   
+   if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, D'2099.12.31', f618))
+     {
+      ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col);
+      ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, name618, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, true);
+      ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, name618, OBJPROP_BACK, true);
+      ObjectSetString(0, name618, OBJPROP_TOOLTIP, "Fibo 61.8%: " + DoubleToString(f618, _Digits));
+      string lbl618 = "SnD_FL618_" + uid;
+      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, from_time, f618))
+        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8  "+DoubleToString(f618,_Digits)); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
+     }
+  }
+
 // ---- Fibo Filter: Check all active zones vs current Fibo grid ----
-void CheckFiboAndTrade(double fibo_low, double fibo_high)
+void CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time)
   {
    // Golden Zone boundaries
    double dist     = fibo_high - fibo_low;
-   double f_upper  = fibo_high - dist * 0.382; // 38.2 retracement from high
-   double f_lower  = fibo_high - dist * 0.618; // 61.8 retracement from high
+   double f_upper  = fibo_high - dist * 0.382; // 38.2 retracement from high (upper bound of Golden Zone)
+   double f_lower  = fibo_high - dist * 0.618; // 61.8 retracement from high (lower bound of Golden Zone)
 
+   bool any_valid = false;
    for(int i=0;i<g_zone_count;i++)
      {
       if(!g_zones[i].active) continue;
@@ -547,6 +586,13 @@ void CheckFiboAndTrade(double fibo_low, double fibo_high)
       // Check if the zone overlaps (touches or is inside) the Golden Zone
       bool overlaps = (g_zones[i].top >= f_lower) && (g_zones[i].btm <= f_upper);
       if(!overlaps) continue;
+
+      // Draw Fibo lines only once when the first overlapping zone is found
+      if(!any_valid)
+        {
+         DrawFiboLines(f_upper, f_lower, from_time);
+         any_valid = true;
+        }
 
       // Execute Demand or Supply
       ExecuteAutoTrade(g_zones[i].is_demand, g_zones[i].top, g_zones[i].btm, g_zones[i].start_time);
@@ -563,15 +609,6 @@ void ProcessBar(int shift)
      {
       datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
       g_last_ph=ph; g_last_ph_time=t;
-      // After BOS Bearish, new PL = confirmation pivot -> draw Fibo from origin High to new PL
-      if(g_fibo_origin_bearish > 0 && t > g_fibo_origin_bear_time)
-        {
-         // For supply zones: Fibo drawn from swing High (origin) DOWN to new PL (ph is new PH after bear BOS, skip)
-         // Actually: after a Bear BOS, we wait for a new Pivot LOW (counter-trend)
-         // We trigger when a new PH forms as final confirmation, but user wants per new pivot
-         // Keep both triggers below
-        }
-     }
 
    double pl=GetPivotLow(InpPivotLB,shift);
    if(pl>0)
@@ -619,13 +656,14 @@ void ProcessBar(int shift)
    if(ph > 0 && g_fibo_origin_bullish > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
       // New Pivot High confirmed after Bullish BOS: Fibo from origin_low to new PH
-      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph);
+      // Use the time of the origin_low as the start for Fibo line drawing
+      CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time);
      }
 
    if(pl > 0 && g_fibo_origin_bearish > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
       // New Pivot Low confirmed after Bearish BOS: Fibo from new PL to origin_high
-      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish);
+      CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time);
      }
 
    CheckMitigation(shift);
