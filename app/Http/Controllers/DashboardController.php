@@ -75,20 +75,43 @@ class DashboardController extends Controller
         $allTradesQuery = TradingLog::where('user_id', Auth::id())
             ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed']);
         $applyDateFilter($allTradesQuery);
-        $allTrades = $allTradesQuery->get();
+        // Order by close_time or created_at for accurate drawdown calculation
+        $allTrades = $allTradesQuery->orderByRaw('COALESCE(close_time, created_at) ASC')->get();
 
-        // Calculate statistics based on all completed trades
         $totalTrades = $allTrades->count();
         $totalProfit = $allTrades->sum('profit_loss');
         
-        // Calculate Win Rate based on positive profit_loss
+        // Win / Loss statistics
         $winningTrades = $allTrades->where('profit_loss', '>', 0)->count();
-        $winRate = $totalTrades > 0 ? round(($winningTrades / $totalTrades) * 100, 2) : 0;
+        $losingTrades  = $allTrades->where('profit_loss', '<', 0)->count();
+        $winRate       = $totalTrades > 0 ? round(($winningTrades / $totalTrades) * 100, 2) : 0;
+        
+        // Profit percentage (Profit Factor: Gross Profit / Gross Loss)
+        $grossProfit = $allTrades->where('profit_loss', '>', 0)->sum('profit_loss');
+        $grossLoss   = abs($allTrades->where('profit_loss', '<', 0)->sum('profit_loss'));
+        $profitPct   = ($grossProfit + $grossLoss) > 0 
+            ? round(($grossProfit / ($grossProfit + $grossLoss)) * 100, 2) 
+            : 0;
+
+        // Max Drawdown & All Time High
+        $cumulative  = 0;
+        $peak        = 0;
+        $maxDrawdown = 0;
+        $allTimeHigh = 0;
+        foreach ($allTrades as $t) {
+            $cumulative += $t->profit_loss;
+            if ($cumulative > $peak) {
+                $peak = $cumulative;
+            }
+            $drawdown    = $peak - $cumulative;
+            $maxDrawdown = max($maxDrawdown, $drawdown);
+            $allTimeHigh = max($allTimeHigh, $cumulative);
+        }
         
         // Today calculations
         $todayStart = \Carbon\Carbon::today();
         
-        // Trades closed today (using close_time from MT5 if available, fallback to created_at)
+        // Trades closed today
         $todayTradesList = $allTrades->filter(function($trade) use ($todayStart) {
             $dateToUse = $trade->close_time ? $trade->close_time : $trade->created_at;
             return $dateToUse >= $todayStart;
@@ -97,7 +120,21 @@ class DashboardController extends Controller
         $todayTradesCount = $todayTradesList->count();
         $todayProfit = $todayTradesList->sum('profit_loss');
         
-        // Real balance from MT5 (updated on each webhook event)
+        // Chart: daily P&L for last 30 days (based on closed trades for this user)
+        $chartData = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $day = \Carbon\Carbon::today()->subDays($i);
+            $dayProfit = $allTrades->filter(function ($t) use ($day) {
+                $date = $t->close_time ?? $t->created_at;
+                return $date && \Carbon\Carbon::parse($date)->isSameDay($day);
+            })->sum('profit_loss');
+            $chartData[] = [
+                'date'   => $day->format('d M'),
+                'profit' => round($dayProfit, 2),
+            ];
+        }
+
+        // Real balance from MT5
         $currentBalance = Auth::user()->balance;
 
         return view('dashboard', compact(
@@ -105,9 +142,15 @@ class DashboardController extends Controller
             'totalTrades',
             'totalProfit',
             'winRate',
+            'winningTrades',
+            'losingTrades',
+            'profitPct',
+            'maxDrawdown',
+            'allTimeHigh',
             'todayTradesCount',
             'todayProfit',
             'currentBalance',
+            'chartData',
             'filter',
             'dateFilter'
         ));
