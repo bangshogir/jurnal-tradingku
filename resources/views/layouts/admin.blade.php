@@ -40,10 +40,12 @@
         /* ===== SIDEBAR ===== */
         .sidebar {
             position: fixed;
-            inset-y: 0;
+            top: 0;
             left: 0;
+            bottom: 0;
             z-index: 50;
             width: 250px;
+            height: 100dvh;
             background: #ffffff;
             border-right: 1px solid #e2e8f0;
             display: flex;
