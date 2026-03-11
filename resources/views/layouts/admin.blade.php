@@ -53,6 +53,39 @@
             @apply opacity-100;
         }
     </style>
+    {{-- Pure CSS fallback for sidebar responsive behavior --}}
+    <style>
+        /* Mobile-first: sidebar hidden by default */
+        #sidebar {
+            transform: translateX(-100%);
+        }
+        #sidebar.sidebar-open {
+            transform: translateX(0) !important;
+        }
+        #mobile-menu-btn {
+            display: flex;
+        }
+        .desktop-only-btn {
+            display: none;
+        }
+
+        /* Desktop: sidebar always visible */
+        @media (min-width: 1024px) {
+            #sidebar {
+                position: relative !important;
+                transform: translateX(0) !important;
+            }
+            #mobile-menu-btn {
+                display: none !important;
+            }
+            .desktop-only-btn {
+                display: block;
+            }
+            #sidebar-overlay {
+                display: none !important;
+            }
+        }
+    </style>
 </head>
 
 <body class="bg-slate-100 text-slate-800">
@@ -60,8 +93,11 @@
     <div class="flex h-screen overflow-hidden bg-slate-50">
 
         {{-- ═══════════════════════════════════════ SIDEBAR ═══════════════════════════════════════ --}}
+        <!-- Sidebar Overlay -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-slate-900/50 z-40 hidden lg:hidden backdrop-blur-sm transition-opacity"></div>
+
         <aside id="sidebar"
-            class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 transition-all duration-300">
+            class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 transition-transform duration-300 -translate-x-full lg:relative lg:translate-x-0">
 
             {{-- Logo --}}
             <div class="flex items-center gap-3 px-6 py-6 border-b border-transparent">
@@ -187,9 +223,14 @@
 
             {{-- HEADER --}}
             <header
-                class="bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 py-4 flex-shrink-0 z-10 sticky top-0">
+                class="bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 py-4 flex-shrink-0 z-10 sticky top-0">
                 <div class="flex items-center gap-2 text-sm">
-                    <button class="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                    <button id="mobile-menu-btn" class="text-slate-500 hover:text-brand-600 transition-colors p-1 mr-1">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <button class="desktop-only-btn text-slate-400 hover:text-slate-600 transition-colors p-1">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M15 19l-7-7 7-7"></path>
@@ -245,7 +286,7 @@
             </header>
 
             {{-- PAGE CONTENT --}}
-            <main class="flex-1 overflow-y-auto p-4 md:p-8">
+            <main class="flex-1 overflow-y-auto p-4 lg:p-8">
                 @if (session('success'))
                     <div
                         class="mb-6 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-medium shadow-sm">
@@ -257,6 +298,40 @@
         </div>
     </div>
 
+    <!-- Mobile Sidebar Toggle Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var sidebar = document.getElementById('sidebar');
+            var overlay = document.getElementById('sidebar-overlay');
+            var mobileMenuBtn = document.getElementById('mobile-menu-btn');
+
+            function openSidebar() {
+                sidebar.classList.add('sidebar-open');
+                overlay.style.display = 'block';
+            }
+
+            function closeSidebar() {
+                sidebar.classList.remove('sidebar-open');
+                overlay.style.display = 'none';
+            }
+
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', function() {
+                    if (sidebar.classList.contains('sidebar-open')) {
+                        closeSidebar();
+                    } else {
+                        openSidebar();
+                    }
+                });
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', function() {
+                    closeSidebar();
+                });
+            }
+        });
+    </script>
 </body>
 
 </html>
