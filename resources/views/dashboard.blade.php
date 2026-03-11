@@ -87,141 +87,122 @@
         </form>
     </div>
 
-    {{-- ==================== STAT CARDS ROW 1 ==================== --}}
-    <div class="grid grid-cols-2 gap-3 mb-3">
-        {{-- Total Users (hidden from normal users, shown here as placeholder or we can use another stat) --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    {{-- Modern Stat Cards --}}
+    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        @php
+            $cards = [
+                [
+                    'label' => 'Total Profit/Loss',
+                    'value' => ($totalProfit >= 0 ? '$' : '-$') . number_format(abs($totalProfit), 2),
+                    'change' => ($todayProfit >= 0 ? '+' : '') . '$' . number_format($todayProfit, 2),
+                    'changeColor' => $todayProfit >= 0 ? 'text-emerald-500' : 'text-red-500',
+                    'subtext' => 'profit today',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+                    'valColor' => $totalProfit >= 0 ? 'text-slate-900' : 'text-red-500',
+                ],
+                [
+                    'label' => 'Win Rate',
+                    'value' => $winRate . '%',
+                    'change' => '',
+                    'changeColor' => 'text-emerald-500',
+                    'subtext' => 'overall',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
+                    'valColor' => 'text-slate-900',
+                ],
+                [
+                    'label' => 'Total Trades',
+                    'value' => number_format($totalTrades),
+                    'change' => '+' . number_format($todayTradesCount),
+                    'changeColor' => 'text-blue-500',
+                    'subtext' => 'trades today',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>',
+                    'valColor' => 'text-slate-900',
+                ],
+                [
+                    'label' => 'Current Balance',
+                    'value' => '$' . number_format($currentBalance, 2),
+                    'change' => '',
+                    'changeColor' => 'text-emerald-500',
+                    'subtext' => 'estimated',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>',
+                    'valColor' => 'text-slate-900',
+                ],
+                [
+                    'label' => 'Win / Loss',
+                    'value' => ($winningTrades ?? 0) . ' / ' . ($losingTrades ?? 0),
+                    'change' => '',
+                    'changeColor' => 'text-slate-500',
+                    'subtext' => 'trades count',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+                    'valColor' => 'text-slate-900',
+                ],
+                [
+                    'label' => 'Profit Factor',
+                    'value' => ($profitPct ?? 0) . '%',
+                    'change' => '',
+                    'changeColor' => 'text-emerald-500',
+                    'subtext' => 'gross pnl',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>',
+                    'valColor' => 'text-slate-900',
+                ],
+                [
+                    'label' => 'Max Drawdown',
+                    'value' => '-$' . number_format($maxDrawdown ?? 0, 2),
+                    'change' => '',
+                    'changeColor' => 'text-red-500',
+                    'subtext' => 'peak to trough',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>',
+                    'valColor' => 'text-red-500',
+                ],
+                [
+                    'label' => 'All Time High',
+                    'value' => '+$' . number_format($allTimeHigh ?? 0, 2),
+                    'change' => '',
+                    'changeColor' => 'text-emerald-500',
+                    'subtext' => 'peak profit',
+                    'icon' =>
+                        '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>',
+                    'valColor' => 'text-emerald-600',
+                ],
+            ];
+        @endphp
+
+        @foreach ($cards as $card)
+            <div
+                class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-shadow duration-200">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="p-2 bg-slate-50 rounded-lg">
+                        {!! $card['icon'] !!}
+                    </div>
+                    <span class="text-xs font-semibold text-slate-500">{{ $card['label'] }}</span>
+                    <button class="ml-auto text-slate-300 hover:text-slate-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
                 </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Total Trades</span>
-            </div>
-            <p class="text-2xl font-extrabold text-slate-800 leading-none">{{ number_format($totalTrades) }}</p>
-        </div>
-
-        {{-- Current Balance --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                <div class="mt-4">
+                    <p class="text-2xl sm:text-3xl font-bold {{ $card['valColor'] }} tracking-tight shadow-sm-text">
+                        {{ $card['value'] }}
+                    </p>
+                    <p class="text-[11px] font-medium mt-1 flex items-center gap-1.5 min-h-[16px]">
+                        @if ($card['change'])
+                            <span class="{{ $card['changeColor'] }}">{{ $card['change'] }}</span>
+                        @endif
+                        <span class="text-slate-400">{{ $card['subtext'] }}</span>
+                    </p>
                 </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Balance</span>
             </div>
-            <p class="text-2xl font-extrabold text-slate-800 leading-none">${{ number_format($currentBalance, 2) }}</p>
-        </div>
-    </div>
-
-    {{-- ==================== STAT CARDS ROW 2 ==================== --}}
-    <div class="grid grid-cols-2 gap-3 mb-3">
-        {{-- Win Count --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Win</span>
-            </div>
-            <p class="text-2xl font-extrabold text-emerald-600 leading-none">{{ number_format($winningTrades ?? 0) }}</p>
-            <p class="text-[11px] text-slate-400 mt-1">Win Rate {{ $winRate }}%</p>
-        </div>
-
-        {{-- Loss Count --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-rose-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Loss</span>
-            </div>
-            <p class="text-2xl font-extrabold text-rose-600 leading-none">{{ number_format($losingTrades ?? 0) }}</p>
-            <p class="text-[11px] text-slate-400 mt-1">Loss Rate {{ ($winningTrades + ($losingTrades ?? 0)) > 0 ? round((($losingTrades ?? 0) / ($winningTrades + ($losingTrades ?? 0))) * 100, 1) : 0 }}%</p>
-        </div>
-    </div>
-
-    {{-- ==================== STAT CARDS ROW 3 ==================== --}}
-    <div class="grid grid-cols-2 gap-3 mb-3">
-        {{-- Total P&L --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 {{ $totalProfit >= 0 ? 'bg-emerald-50' : 'bg-rose-50' }} rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 {{ $totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Total P&amp;L</span>
-            </div>
-            <p class="text-[22px] font-extrabold {{ $totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600' }} leading-none">
-                {{ $totalProfit >= 0 ? '+' : '-' }}${{ number_format(abs($totalProfit), 2) }}
-            </p>
-        </div>
-
-        {{-- Today P&L --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Today P&amp;L</span>
-            </div>
-            <p class="text-[22px] font-extrabold {{ $todayProfit >= 0 ? 'text-emerald-600' : 'text-rose-600' }} leading-none">
-                {{ $todayProfit >= 0 ? '+' : '-' }}${{ number_format(abs($todayProfit), 2) }}
-            </p>
-            <p class="text-[11px] text-slate-400 mt-1">{{ $todayTradesCount }} trades today</p>
-        </div>
-    </div>
-
-    {{-- ==================== STAT CARDS ROW 4 ==================== --}}
-    <div class="grid grid-cols-2 gap-3 mb-4">
-        {{-- Max Drawdown --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-rose-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Max Drawdown</span>
-            </div>
-            <p class="text-[22px] font-extrabold text-rose-600 leading-none">-${{ number_format($maxDrawdown ?? 0, 2) }}</p>
-        </div>
-
-        {{-- All Time High --}}
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-2 mb-2.5">
-                <div class="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-                </div>
-                <span class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">All Time High</span>
-            </div>
-            <p class="text-[22px] font-extrabold text-emerald-600 leading-none">+${{ number_format($allTimeHigh ?? 0, 2) }}</p>
-        </div>
-    </div>
-
-    {{-- ==================== PROFIT % + WIN RATE BAR ==================== --}}
-    <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm mb-4">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-bold text-slate-800">Profit Factor</span>
-            <span class="text-xs font-bold text-brand-600">{{ $profitPct ?? 0 }}%</span>
-        </div>
-        <div class="bg-slate-100 rounded-full h-2 overflow-hidden">
-            <div class="bg-gradient-to-r from-brand-600 to-cyan-400 h-full rounded-full transition-all duration-500" style="width:{{ $profitPct ?? 0 }}%;"></div>
-        </div>
-        <div class="flex items-center justify-between mt-3 mb-2">
-            <span class="text-xs font-bold text-slate-800">Win Rate</span>
-            <span class="text-xs font-bold text-emerald-600">{{ $winRate }}%</span>
-        </div>
-        <div class="bg-slate-100 rounded-full h-2 overflow-hidden">
-            <div class="bg-gradient-to-r from-emerald-500 to-green-300 h-full rounded-full transition-all duration-500" style="width:{{ $winRate }}%;"></div>
-        </div>
-    </div>
-
-    {{-- ==================== CHART ==================== --}}
-    <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <div>
-                <p class="text-[13px] font-bold text-slate-800">Daily P&amp;L (30 Days)</p>
-                <p class="text-[11px] text-slate-400">Profit/Loss per hari</p>
-            </div>
-        </div>
-        <canvas id="dailyPnlChart" class="w-full max-h-[220px]"></canvas>
-    </div>
+        @endforeach
+    </dl>
 
     {{-- Trade History Table / Last Sales style --}}
     <div class="mb-4 flex items-center justify-between">
@@ -364,63 +345,4 @@
         @endif
     </div>
 
-    {{-- Chart.js Initialization --}}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var chartData = @json($chartData ?? []);
-            if(chartData.length === 0) return;
-
-            var labels  = chartData.map(function(d) { return d.date; });
-            var profits = chartData.map(function(d) { return d.profit; });
-
-            var colors = profits.map(function(v) { return v >= 0 ? 'rgba(16, 185, 129, 0.85)' : 'rgba(225, 29, 72, 0.85)'; });
-            var borders = profits.map(function(v) { return v >= 0 ? '#10b981' : '#e11d48'; });
-
-            var ctx = document.getElementById('dailyPnlChart');
-            if (!ctx) return;
-
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: profits,
-                        backgroundColor: colors,
-                        borderColor: borders,
-                        borderWidth: 1.5,
-                        borderRadius: 4,
-                        borderSkipped: false,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(c) {
-                                    return (c.raw >= 0 ? '+$' : '-$') + Math.abs(c.raw).toFixed(2);
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: { font: { size: 10, family: 'Inter' }, color: '#94a3b8', maxTicksLimit: 7 }
-                        },
-                        y: {
-                            grid: { color: '#f1f5f9' },
-                            ticks: {
-                                font: { size: 10, family: 'Inter' }, color: '#94a3b8',
-                                callback: function(v) { return '$' + v; }
-                            }
-                        }
-                    }
-                }
-            });
-        });
-    </script>
 @endsection
