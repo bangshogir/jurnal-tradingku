@@ -90,6 +90,7 @@ bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bu
 bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
 int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
 int      g_pending_bear_zone_idx = -1; // Exact zone index created by latest Bear BOS
+bool     g_is_scanning_history = false; // Prevents auto trades from firing during history scan
 
 // Array to prevent duplicate pending orders on the same zone
 datetime g_traded_zones[];
@@ -412,14 +413,34 @@ void ResyncHistory()
   {
    if(InpResyncDays <= 0 || InpWebhookURL == "") return;
    datetime to = TimeCurrent() + 86400; datetime from = TimeCurrent() - (InpResyncDays * 86400);
+   
+   // 1. Collect all OUT deals (closed trades) safely
+   ulong outDeals[];
    if(HistorySelect(from, to)) {
-      for(int i = 0; i < HistoryDealsTotal(); i++) {
+      int total = HistoryDealsTotal();
+      for(int i = 0; i < total; i++) {
          ulong t = HistoryDealGetTicket(i);
-         if(HistoryDealGetInteger(t, DEAL_ENTRY) == DEAL_ENTRY_OUT) SendTradeDataToWebhook(t, "deal_close");
+         if(HistoryDealGetInteger(t, DEAL_ENTRY) == DEAL_ENTRY_OUT) {
+             int size = ArraySize(outDeals);
+             ArrayResize(outDeals, size + 1);
+             outDeals[size] = t;
+         }
       }
    }
+   for(int i = 0; i < ArraySize(outDeals); i++) {
+      SendTradeDataToWebhook(outDeals[i], "deal_close");
+   }
+
+   // 2. Collect all Open Positions safely
+   ulong openPositions[];
    for(int i = 0; i < PositionsTotal(); i++) {
       long posID = PositionGetInteger(POSITION_IDENTIFIER);
+      int size = ArraySize(openPositions);
+      ArrayResize(openPositions, size + 1);
+      openPositions[size] = (ulong)posID;
+   }
+   for(int i = 0; i < ArraySize(openPositions); i++) {
+      long posID = (long)openPositions[i];
       if(HistorySelectByPosition(posID)) {
          for(int d = 0; d < HistoryDealsTotal(); d++) {
             ulong t = HistoryDealGetTicket(d);
@@ -427,7 +448,17 @@ void ResyncHistory()
          }
       }
    }
-   for(int i = 0; i < OrdersTotal(); i++) SendTradeDataToWebhook(OrderGetTicket(i), "pending_order");
+   
+   // 3. Collect all Pending Orders safely
+   ulong activeOrders[];
+   for(int i = 0; i < OrdersTotal(); i++) {
+      int size = ArraySize(activeOrders);
+      ArrayResize(activeOrders, size + 1);
+      activeOrders[size] = OrderGetTicket(i);
+   }
+   for(int i = 0; i < ArraySize(activeOrders); i++) {
+      SendTradeDataToWebhook(activeOrders[i], "pending_order");
+   }
   }
 
 //=====================================================================
@@ -443,10 +474,10 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
      { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
+     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
    string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)+" "); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_RIGHT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)+" "); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true; g_zones[g_zone_count].has_idm=false; g_zones[g_zone_count].is_ultra=false;
@@ -488,7 +519,15 @@ void MitigateZone(int idx, datetime t)
 
 void UpdateZoneLabelsTime(datetime t)
   {
-   for(int i=0;i<g_zone_count;i++) if(g_zones[i].active) { ObjectMove(0,g_zones[i].lbl_top,0,t,g_zones[i].top); ObjectMove(0,g_zones[i].lbl_btm,0,t,g_zones[i].btm); }
+   for(int i=0;i<g_zone_count;i++) 
+      if(g_zones[i].active) 
+        { 
+         datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
+         // Move lname to exact middle of the box (price midpoint)
+         ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0);
+         ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top); 
+         ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm); 
+        }
   }
 
 // ---- Pivot Detection ----
@@ -526,6 +565,7 @@ void CheckMitigation(int shift)
 // ---- Execution ----
 void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
   {
+   if(g_is_scanning_history) return;
    if(!InpEnableAutoSnD) return;
    if(IsZoneTraded(zoneTime)) return;
    double risk = StringToDouble(ExtPanel.m_edt_risk.Text());
@@ -715,9 +755,11 @@ void ProcessBar(int shift)
 
 void ScanHistory()
   {
+   g_is_scanning_history = true;
    int total=iBars(_Symbol,_Period);
    int start=MathMin(InpHistoryBars+InpPivotLB*2+InpOriginLookback,total-2);
    for(int i=start;i>=1;i--) ProcessBar(i);
+   g_is_scanning_history = false;
   }
 
 void DeleteAllSnDObjects()
@@ -756,6 +798,9 @@ void OnTick()
    ExtPanel.UpdateStats();
    CheckCutLoss();
    CheckAutoCloseFriday();
+   
+   // Selalu update label text agar dinamis terus berada di TENGAH kotak
+   UpdateZoneLabelsTime(TimeCurrent());
    
    // Engine Auto SnD memproses candle jika baru ditutup
    datetime currentBarTime = iTime(_Symbol, _Period, 0);

@@ -490,7 +490,8 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    if(g_zone_count >= MAX_ZONES) return;
    color col_use = is_demand ? InpDemandColor : InpSupplyColor;
    string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
-   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
+   datetime future_time = TimeCurrent() + 259200000;
+   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,future_time,btm))
      { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,Digits)+" Btm:"+DoubleToString(btm,Digits)); }
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
      { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
@@ -535,13 +536,14 @@ void MitigateZone(int idx, datetime t)
 
 void UpdateZoneLabelsTime(datetime t)
   {
+   double pt = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
    for(int i=0;i<g_zone_count;i++) 
       if(g_zones[i].active) 
         { 
          datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
          ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0);
-         ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top); 
-         ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm); 
+         ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top + 5*pt); 
+         ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm - 5*pt); 
         }
   }
 
@@ -771,6 +773,7 @@ bool g_resync_done = false;
 
 int OnInit()
   {
+   ChartSetInteger(0, CHART_FOREGROUND, false);
    if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 420)) return INIT_FAILED;
    ExtPanel.Run();
    
