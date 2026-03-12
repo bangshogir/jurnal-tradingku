@@ -420,10 +420,11 @@ void InitialHistorySync()
        }
    }
    for(int i=0; i<ArraySize(outDeals); i++) {
-        OrderSelect(outDeals[i], SELECT_BY_TICKET, MODE_HISTORY);
-        int ot = OrderType();
-        if(ot <= OP_SELL) SendTradeDataToWebhook(outDeals[i], "deal_close");
-        else SendTradeDataToWebhook(outDeals[i], "pending_cancel");
+        if(OrderSelect(outDeals[i], SELECT_BY_TICKET, MODE_HISTORY)) {
+            int ot = OrderType();
+            if(ot <= OP_SELL) SendTradeDataToWebhook(outDeals[i], "deal_close");
+            else SendTradeDataToWebhook(outDeals[i], "pending_cancel");
+        }
    }
 
    // Initialize active tickets tracker
@@ -439,10 +440,11 @@ void InitialHistorySync()
    ArrayResize(g_active_tickets, ArraySize(current_tickets));
    for(int i=0; i<ArraySize(current_tickets); i++) {
         g_active_tickets[i] = current_tickets[i];
-        OrderSelect(current_tickets[i], SELECT_BY_TICKET, MODE_TRADES);
-        int ot = OrderType();
-        if(ot <= OP_SELL) SendTradeDataToWebhook(current_tickets[i], "deal_open");
-        else SendTradeDataToWebhook(current_tickets[i], "pending_order");
+        if(OrderSelect(current_tickets[i], SELECT_BY_TICKET, MODE_TRADES)) {
+            int ot = OrderType();
+            if(ot <= OP_SELL) SendTradeDataToWebhook(current_tickets[i], "deal_open");
+            else SendTradeDataToWebhook(current_tickets[i], "pending_order");
+        }
    }
   }
 
@@ -757,8 +759,8 @@ void ScanHistory()
 
 void DeleteAllSnDObjects()
   {
-   for(int i=ObjectsTotal(0)-1;i>=0;i--)
-     { string n=ObjectName(0,i); if(StringFind(n,"SnD_")==0) ObjectDelete(0,n); }
+   for(int i=ObjectsTotal()-1;i>=0;i--)
+     { string n=ObjectName(i); if(StringFind(n,"SnD_")==0) ObjectDelete(n); }
   }
 
 
