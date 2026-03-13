@@ -71,7 +71,9 @@ class TradingWebhookController extends Controller
             $msg = "🗑️ <b>PENDING CANCELED</b> 🗑️\n";
             $msg .= "🏷️ Pair: <b>{$validated['symbol']}</b>\n";
             $msg .= "🎫 Ticket: {$validated['ticket_id']}\n";
-            \App\Services\TelegramService::sendMessage($msg);
+            if (!empty($user->telegram_chat_id)) {
+                \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
+            }
 
             Log::info("Webhook received: Pending order cancelled for ticket: " . $validated['ticket_id']);
             return response()->json(['message' => 'Pending order cancelled successfully'], 200);
@@ -136,8 +138,8 @@ class TradingWebhookController extends Controller
                 $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
             }
 
-            if ($msg !== "") {
-                \App\Services\TelegramService::sendMessage($msg);
+            if ($msg !== "" && !empty($user->telegram_chat_id)) {
+                \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
             
             Log::info("Webhook received and saved for ticket: " . $validated['ticket_id']);

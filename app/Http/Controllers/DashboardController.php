@@ -177,4 +177,17 @@ class DashboardController extends Controller
             
         return view('open', compact('trades'));
     }
+
+    public function updateTelegram(Request $request)
+    {
+        $request->validate([
+            'telegram_chat_id' => 'nullable|string|max:50',
+        ]);
+
+        $user = auth()->user();
+        $user->telegram_chat_id = $request->telegram_chat_id;
+        $user->save();
+
+        return redirect()->back()->with('success', 'Telegram Chat ID updated successfully.');
+    }
 }

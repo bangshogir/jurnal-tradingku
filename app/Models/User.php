@@ -25,6 +25,7 @@ class User extends Authenticatable
         'role',
         'webhook_token',
         'balance',
+        'telegram_chat_id',
     ];
 
     /**

@@ -10,13 +10,12 @@ class TelegramService
     /**
      * Send a formatted HTML text message to the Telegram Bot.
      */
-    public static function sendMessage(string $message)
+    public static function sendMessage(string $message, string $chatId)
     {
         $token = env('TELEGRAM_BOT_TOKEN');
-        $chatId = env('TELEGRAM_CHAT_ID');
 
         if (empty($token) || empty($chatId)) {
-            Log::warning('Telegram Notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured in .env');
+            Log::warning('Telegram Notification skipped: TELEGRAM_BOT_TOKEN is missing or User has no Chat ID');
             return false;
         }
 
