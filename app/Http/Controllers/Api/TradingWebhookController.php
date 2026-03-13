@@ -138,7 +138,17 @@ class TradingWebhookController extends Controller
                 $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
             }
 
-            if ($msg !== "" && !empty($user->telegram_chat_id)) {
+            // DEDUPLICATE: Only notify on real state changes, not repeated polls
+            // - pending_order / deal_open  → only on brand-new record
+            // - deal_close                 → only when type column actually changed
+            $shouldNotify = false;
+            if ($type === 'deal_close') {
+                $shouldNotify = $log->wasChanged('type'); // fired only once: when status transitions to closed
+            } elseif (in_array($type, ['deal_open', 'pending_order'])) {
+                $shouldNotify = $log->wasRecentlyCreated; // fired only on first insert
+            }
+
+            if ($msg !== "" && !empty($user->telegram_chat_id) && $shouldNotify) {
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
             
