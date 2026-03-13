@@ -399,8 +399,18 @@ void SendTradeDataToWebhook(int ticket, string eventType)
    char post[], resW[];
    StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
    int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
-   string resHeaders;
-   WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
+   int res = WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
+   if(res == -1) {
+      int err = GetLastError();
+      if(err == 4060) Print("WEBHOOK BLOCKED! Please go to Tools -> Options -> Expert Advisors, tick 'Allow WebRequest' and add: http://jurnaltradingku.my.id");
+      else Print("WEBHOOK ERROR! Code: ", err);
+   } else if(res != 200 && res != 201) {
+      Print("WEBHOOK SERVER ERROR! HTTP Response Code: ", res);
+      string resStr = CharArrayToString(resW);
+      Print("Server Reply: ", resStr);
+   } else {
+      Print("Webhook Success! Sent Ticket ", ticket, " Event: ", eventType);
+   }
   }
 
 void InitialHistorySync()
