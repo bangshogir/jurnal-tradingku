@@ -64,14 +64,15 @@ class TradingWebhookController extends Controller
 
         // Handle Canceled Pending Orders
         if ($validated['type'] === 'pending_cancel') {
-            TradingLog::where('user_id', $user->id)
+            $deleted = TradingLog::where('user_id', $user->id)
                 ->where('ticket_id', $validated['ticket_id'])
                 ->delete();
             
-            $msg = "🗑️ <b>PENDING CANCELED</b> 🗑️\n";
-            $msg .= "🏷️ Pair: <b>{$validated['symbol']}</b>\n";
-            $msg .= "🎫 Ticket: {$validated['ticket_id']}\n";
-            if (!empty($user->telegram_chat_id)) {
+            // Only notify once — when we actually deleted the record (first webhook to arrive)
+            if ($deleted > 0 && !empty($user->telegram_chat_id)) {
+                $msg = "🗑️ <b>PENDING CANCELED</b> 🗑️\n";
+                $msg .= "🏷️ Pair: <b>{$validated['symbol']}</b>\n";
+                $msg .= "🎫 Ticket: {$validated['ticket_id']}\n";
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
 
