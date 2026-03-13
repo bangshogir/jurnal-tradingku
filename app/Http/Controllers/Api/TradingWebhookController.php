@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TradingLog;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TradingWebhookController extends Controller
@@ -139,13 +140,13 @@ class TradingWebhookController extends Controller
                 $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
             }
 
-            // DEDUPLICATE: Notify only on a real state change:
-            // - wasRecentlyCreated → brand-new ticket (true first insert)
-            // - wasChanged('type') → status transitioned (pending→open, open→closed, etc.)
-            // Repeated webhooks with identical data will silently skip the notification.
-            $shouldNotify = $log->wasRecentlyCreated || $log->wasChanged('type');
+            // DEDUPLICATE via Cache: fire once per unique ticket+event combination.
+            // 60-second TTL absorbs all duplicate webhooks from multiple chart instances.
+            $cacheKey = "tg_notified_{$user->id}_{$validated['ticket_id']}_{$type}";
+            $alreadyNotified = Cache::has($cacheKey);
 
-            if ($msg !== "" && !empty($user->telegram_chat_id) && $shouldNotify) {
+            if ($msg !== "" && !empty($user->telegram_chat_id) && !$alreadyNotified) {
+                Cache::put($cacheKey, true, now()->addSeconds(60));
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
             
