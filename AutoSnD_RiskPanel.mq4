@@ -399,6 +399,7 @@ void SendTradeDataToWebhook(int ticket, string eventType)
    char post[], resW[];
    StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
    int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
+   string resHeaders;
    int res = WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
    if(res == -1) {
       int err = GetLastError();
