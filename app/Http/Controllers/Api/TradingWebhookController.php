@@ -68,6 +68,11 @@ class TradingWebhookController extends Controller
                 ->where('ticket_id', $validated['ticket_id'])
                 ->delete();
             
+            $msg = "🗑️ <b>PENDING CANCELED</b> 🗑️\n";
+            $msg .= "🏷️ Pair: <b>{$validated['symbol']}</b>\n";
+            $msg .= "🎫 Ticket: {$validated['ticket_id']}\n";
+            \App\Services\TelegramService::sendMessage($msg);
+
             Log::info("Webhook received: Pending order cancelled for ticket: " . $validated['ticket_id']);
             return response()->json(['message' => 'Pending order cancelled successfully'], 200);
         }
@@ -96,6 +101,44 @@ class TradingWebhookController extends Controller
                     'comment' => $validated['comment'] ?? '',
                 ]
             );
+
+            // TELEGRAM NOTIFICATION
+            $type = $validated['type'];
+            $symbol = $validated['symbol'];
+            $entry = $validated['entry_price'] ?? 0;
+            $sl = $validated['sl_price'] ?? 0;
+            $tp = $validated['tp_price'] ?? 0;
+            $lot = $validated['lot_size'] ?? 0;
+            $profit = $validated['profit_loss'] ?? 0;
+            $bal = $user->balance ?? 0;
+
+            $msg = "";
+            if ($type === 'deal_open') {
+                $msg .= "🚨 <b>NEW ORDER OPENED</b> 🚨\n";
+                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "⚖️ Lot: {$lot}\n";
+                $msg .= "🎯 Entry: {$entry}\n";
+                $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
+            } elseif ($type === 'deal_close') {
+                $msg .= "🏁 <b>TRADE CLOSED</b> 🏁\n";
+                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "⚖️ Lot: {$lot}\n";
+                $msg .= "🚪 Close Price: " . ($validated['close_price'] ?? 0) . "\n";
+                
+                $emoji = $profit >= 0 ? "🟩" : "🟥";
+                $msg .= "💲 Profit/Loss: {$emoji} <b>$" . number_format($profit, 2) . "</b>\n";
+                $msg .= "💼 Balance: $" . number_format($bal, 2) . "\n";
+            } elseif ($type === 'pending_order') {
+                $msg .= "⏳ <b>PENDING ORDER PLACED</b> ⏳\n";
+                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "⚖️ Lot: {$lot}\n";
+                $msg .= "🎯 Target Entry: {$entry}\n";
+                $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
+            }
+
+            if ($msg !== "") {
+                \App\Services\TelegramService::sendMessage($msg);
+            }
             
             Log::info("Webhook received and saved for ticket: " . $validated['ticket_id']);
             return response()->json(['message' => 'Success', 'data' => $log], 201);
