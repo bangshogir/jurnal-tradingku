@@ -374,6 +374,7 @@ void SendTradeDataToWebhook(int ticket, string eventType)
    lotSize = OrderLots(); profitLoss = OrderProfit();
    swap = OrderSwap(); commission = OrderCommission();
    magicNumber = OrderMagicNumber(); comment = OrderComment();
+   openTime = OrderOpenTime(); closeTime = OrderCloseTime();
    string oTS = (openTime > 0) ? TimeToString(openTime, TIME_DATE | TIME_SECONDS) : "";
    string cTS = (closeTime > 0) ? TimeToString(closeTime, TIME_DATE | TIME_SECONDS) : "";
    StringReplace(oTS, ".", "-"); StringReplace(cTS, ".", "-");

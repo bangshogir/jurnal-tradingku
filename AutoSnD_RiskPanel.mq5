@@ -353,6 +353,7 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
             if(HistoryDealGetInteger(dt, DEAL_ENTRY) == DEAL_ENTRY_IN) { entryPrice = HistoryDealGetDouble(dt, DEAL_PRICE); openTime = (datetime)HistoryDealGetInteger(dt, DEAL_TIME); break; }
          }
       }
+      closeTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
      }
    else if(eventType == "deal_open") // OPEN ORDER/POSITION
      {
@@ -380,6 +381,7 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
       tpPrice = isCancel ? HistoryOrderGetDouble(ticket, ORDER_TP) : OrderGetDouble(ORDER_TP);
       lotSize = isCancel ? HistoryOrderGetDouble(ticket, ORDER_VOLUME_INITIAL) : OrderGetDouble(ORDER_VOLUME_INITIAL);
       openTime = isCancel ? (datetime)HistoryOrderGetInteger(ticket, ORDER_TIME_SETUP) : (datetime)OrderGetInteger(ORDER_TIME_SETUP);
+      closeTime = isCancel ? (datetime)HistoryOrderGetInteger(ticket, ORDER_TIME_DONE) : 0;
       magicNumber = isCancel ? HistoryOrderGetInteger(ticket, ORDER_MAGIC) : OrderGetInteger(ORDER_MAGIC);
       comment = isCancel ? HistoryOrderGetString(ticket, ORDER_COMMENT) : OrderGetString(ORDER_COMMENT);
      }
