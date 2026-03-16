@@ -75,16 +75,20 @@ class TradingWebhookController extends Controller
             $accountLabel = '';
 
             if ($accName) {
-                // Check if user defined a custom route for this specific account
+                // EA sends "LoginNumber - ServerName". Extract numeric login part for matching.
+                $accountLogin = trim(explode('-', $accName)[0]);
+
                 $route = \App\Models\TelegramRouting::where('user_id', $user->id)
-                    ->where('account_number', $accName)
-                    ->first();
+                    ->where(function($q) use ($accName, $accountLogin) {
+                        $q->where('account_number', $accName)
+                          ->orWhere('account_number', $accountLogin);
+                    })->first();
                 
                 if ($route && !empty($route->telegram_chat_id)) {
                     $targetChatId = $route->telegram_chat_id;
-                    $accountLabel = $route->description ? $route->description : "Acc: {$accName}";
+                    $accountLabel = $route->description ? $route->description : "Acc: {$accountLogin}";
                 } else {
-                    $accountLabel = "Acc: {$accName}";
+                    $accountLabel = "Acc: {$accountLogin}";
                 }
             }
 
@@ -142,15 +146,20 @@ class TradingWebhookController extends Controller
             $accountLabel = '';
 
             if ($accName) {
+                // EA sends "LoginNumber - ServerName". Extract numeric login part for matching.
+                $accountLogin = trim(explode('-', $accName)[0]);
+
                 $route = \App\Models\TelegramRouting::where('user_id', $user->id)
-                    ->where('account_number', $accName)
-                    ->first();
+                    ->where(function($q) use ($accName, $accountLogin) {
+                        $q->where('account_number', $accName)
+                          ->orWhere('account_number', $accountLogin);
+                    })->first();
                 
                 if ($route && !empty($route->telegram_chat_id)) {
                     $targetChatId = $route->telegram_chat_id;
-                    $accountLabel = $route->description ? $route->description : "Acc: {$accName}";
+                    $accountLabel = $route->description ? $route->description : "Acc: {$accountLogin}";
                 } else {
-                    $accountLabel = "Acc: {$accName}";
+                    $accountLabel = "Acc: {$accountLogin}";
                 }
             }
 
