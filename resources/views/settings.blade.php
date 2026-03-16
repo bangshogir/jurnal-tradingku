@@ -95,21 +95,21 @@
                     <div class="flex-1 w-full">
                         <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Account Number</label>
                         <input type="text" name="account_number" required placeholder="e.g 1234567"
-                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                            class="w-full bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm transition-all">
                     </div>
                     <div class="flex-1 w-full">
                         <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Target Chat ID</label>
                         <input type="text" name="telegram_chat_id" required placeholder="e.g -100987654321"
-                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                            class="w-full bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm transition-all">
                     </div>
                     <div class="flex-1 w-full">
                         <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Description (Optional)</label>
                         <input type="text" name="description" placeholder="e.g Live Account"
-                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                            class="w-full bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm transition-all">
                     </div>
                     <div class="w-full sm:w-auto">
                         <button type="submit"
-                            class="w-full px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 shadow-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
+                            class="w-full px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 whitespace-nowrap">
                             Add Route
                         </button>
                     </div>
