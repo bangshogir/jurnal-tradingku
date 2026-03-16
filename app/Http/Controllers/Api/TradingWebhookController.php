@@ -54,6 +54,7 @@ class TradingWebhookController extends Controller
             'open_time'    => 'nullable|date',
             'close_time'   => 'nullable|date',
             'balance'      => 'nullable|numeric',   // MT5 AccountInfoDouble(ACCOUNT_BALANCE)
+            'account_name' => 'nullable|string',
         ]);
 
         // Update the user's balance from MT5 whenever data is received
@@ -70,7 +71,9 @@ class TradingWebhookController extends Controller
             
             // Only notify once — when we actually deleted the record (first webhook to arrive)
             if ($deleted > 0 && !empty($user->telegram_chat_id)) {
+                $accName = $validated['account_name'] ?? 'Unknown Account';
                 $msg = "<b>[🗑️ PENDING CANCELED]</b>\n";
+                $msg .= "👤 Acc: <b>{$accName}</b>\n";
                 $msg .= "Pair: <b>{$validated['symbol']}</b>\n";
                 $msg .= "Ticket: {$validated['ticket_id']}\n";
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
@@ -114,6 +117,7 @@ class TradingWebhookController extends Controller
             $lot = $validated['lot_size'] ?? 0;
             $profit = $validated['profit_loss'] ?? 0;
             $bal = $user->balance ?? 0;
+            $accName = $validated['account_name'] ?? 'Unknown Account';
 
             $msg = "";
             $typeUpper = strtoupper($type);
@@ -121,6 +125,7 @@ class TradingWebhookController extends Controller
             // Match based on MT4's actual typeStr payload
             if (in_array($type, ['buy', 'sell'])) {
                 $msg .= "<b>[🟢 ORDER OPENED]</b>\n";
+                $msg .= "👤 Acc: <b>{$accName}</b>\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
@@ -128,6 +133,7 @@ class TradingWebhookController extends Controller
                 $msg .= "SL: {$sl} | TP: {$tp}\n";
             } elseif (in_array($type, ['buy_closed', 'sell_closed'])) {
                 $msg .= "<b>[🏁 TRADE CLOSED]</b>\n";
+                $msg .= "👤 Acc: <b>{$accName}</b>\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
@@ -139,6 +145,7 @@ class TradingWebhookController extends Controller
                 $msg .= "Balance: $" . number_format($bal, 2) . "\n";
             } elseif (in_array($type, ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'])) {
                 $msg .= "<b>[⌛ PENDING ORDER]</b>\n";
+                $msg .= "👤 Acc: <b>{$accName}</b>\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
