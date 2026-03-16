@@ -379,17 +379,7 @@ void SendTradeDataToWebhook(int ticket, string eventType)
    string accCurr = AccountInfoString(ACCOUNT_CURRENCY); StringToLower(accCurr);
    double div = (StringFind(accCurr, "c") >= 0) ? 100.0 : 1.0;
    
-   string oTS = (openTime > 0) ? TimeToString(openTime, TIME_DATE | TIME_SECONDS) : "";
-   string cTS = (closeTime > 0) ? TimeToString(closeTime, TIME_DATE | TIME_SECONDS) : "";
-   StringReplace(oTS, ".", "-"); StringReplace(cTS, ".", "-");
-   
-   string accLogin = IntegerToString((int)AccountInfoInteger(ACCOUNT_LOGIN));
-   string accServer = AccountInfoString(ACCOUNT_SERVER);
-   string accountName = accLogin + " - " + accServer;
-   StringReplace(accountName, "\"", "\\\"");
-   
    string json = "{";
-   json += "\"account_name\": \"" + accountName + "\",";
    json += "\"ticket_id\": \"" + IntegerToString(ticket) + "\", \"symbol\": \"" + symbol + "\", \"type\": \"" + typeStr + "\",";
    json += "\"entry_price\": " + DoubleToString(entryPrice, 5) + ", \"close_price\": " + DoubleToString(closePrice, 5) + ",";
    json += "\"sl_price\": " + DoubleToString(slPrice, 5) + ", \"tp_price\": " + DoubleToString(tpPrice, 5) + ",";
