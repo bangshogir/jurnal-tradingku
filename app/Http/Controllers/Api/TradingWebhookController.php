@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\TradingLog;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TradingWebhookController extends Controller
@@ -117,36 +116,42 @@ class TradingWebhookController extends Controller
             $bal = $user->balance ?? 0;
 
             $msg = "";
-            if ($type === 'deal_open') {
+            $typeUpper = strtoupper($type);
+
+            // Match based on MT4's actual typeStr payload
+            if (in_array($type, ['buy', 'sell'])) {
                 $msg .= "🚨 <b>NEW ORDER OPENED</b> 🚨\n";
                 $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
                 $msg .= "⚖️ Lot: {$lot}\n";
                 $msg .= "🎯 Entry: {$entry}\n";
                 $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
-            } elseif ($type === 'deal_close') {
+            } elseif (in_array($type, ['buy_closed', 'sell_closed'])) {
                 $msg .= "🏁 <b>TRADE CLOSED</b> 🏁\n";
                 $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
                 $msg .= "⚖️ Lot: {$lot}\n";
                 $msg .= "🚪 Close Price: " . ($validated['close_price'] ?? 0) . "\n";
                 
                 $emoji = $profit >= 0 ? "🟩" : "🟥";
                 $msg .= "💲 Profit/Loss: {$emoji} <b>$" . number_format($profit, 2) . "</b>\n";
                 $msg .= "💼 Balance: $" . number_format($bal, 2) . "\n";
-            } elseif ($type === 'pending_order') {
+            } elseif (in_array($type, ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'])) {
                 $msg .= "⏳ <b>PENDING ORDER PLACED</b> ⏳\n";
                 $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
+                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
                 $msg .= "⚖️ Lot: {$lot}\n";
                 $msg .= "🎯 Target Entry: {$entry}\n";
                 $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
             }
 
-            // DEDUPLICATE via Cache: fire once per unique ticket+event combination.
-            // 60-second TTL absorbs all duplicate webhooks from multiple chart instances.
-            $cacheKey = "tg_notified_{$user->id}_{$validated['ticket_id']}_{$type}";
-            $alreadyNotified = Cache::has($cacheKey);
+            // DEDUPLICATE: Notify only on a real state change:
+            // - wasRecentlyCreated → brand-new ticket (true first insert)
+            // - wasChanged('type') → status transitioned (e.g. buy_limit → buy, buy → buy_closed)
+            // Repeated webhooks with identical data will silently skip the notification.
+            $shouldNotify = $log->wasRecentlyCreated || $log->wasChanged('type');
 
-            if ($msg !== "" && !empty($user->telegram_chat_id) && !$alreadyNotified) {
-                Cache::put($cacheKey, true, now()->addSeconds(60));
+            if ($msg !== "" && !empty($user->telegram_chat_id) && $shouldNotify) {
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
             
