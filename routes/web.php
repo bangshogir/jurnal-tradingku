@@ -29,6 +29,30 @@ Route::middleware(['auth'])->group(function () {
     // Telegram Routing endpoints
     Route::post('/telegram-routings', [TelegramRoutingController::class, 'store'])->name('telegram-routings.store');
     Route::delete('/telegram-routings/{telegramRouting}', [TelegramRoutingController::class, 'destroy'])->name('telegram-routings.destroy');
+
+    // Telegram Debug (Test Notification)
+    Route::get('/debug/telegram', function () {
+        $user = auth()->user();
+        $token = config('services.telegram.bot_token');
+        $chatId = $user->telegram_chat_id;
+
+        if (empty($token)) {
+            return response()->json(['status' => 'error', 'message' => 'TELEGRAM_BOT_TOKEN is missing in .env']);
+        }
+        if (empty($chatId)) {
+            return response()->json(['status' => 'error', 'message' => 'No Default Chat ID set for your account. Go to Settings and save a Chat ID first.']);
+        }
+
+        $result = \App\Services\TelegramService::sendMessage(
+            "✅ <b>Test Notifikasi Berhasil!</b>\n🤖 Bot terhubung dengan Jurnal Trading.\n👤 User: <b>{$user->name}</b>",
+            $chatId
+        );
+
+        if ($result) {
+            return response()->json(['status' => 'ok', 'message' => 'Pesan test berhasil dikirim ke Chat ID: ' . $chatId]);
+        }
+        return response()->json(['status' => 'error', 'message' => 'Gagal mengirim pesan. Cek laravel.log untuk detail error dari Telegram API.']);
+    })->name('debug.telegram');
 });
 
 // ─── Admin Routes ────────────────────────────────────────────
