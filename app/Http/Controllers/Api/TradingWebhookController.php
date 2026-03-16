@@ -70,9 +70,9 @@ class TradingWebhookController extends Controller
             
             // Only notify once — when we actually deleted the record (first webhook to arrive)
             if ($deleted > 0 && !empty($user->telegram_chat_id)) {
-                $msg = "🗑️ <b>PENDING CANCELED</b> 🗑️\n";
-                $msg .= "🏷️ Pair: <b>{$validated['symbol']}</b>\n";
-                $msg .= "🎫 Ticket: {$validated['ticket_id']}\n";
+                $msg = "<b>[🗑️ PENDING CANCELED]</b>\n";
+                $msg .= "Pair: <b>{$validated['symbol']}</b>\n";
+                $msg .= "Ticket: {$validated['ticket_id']}\n";
                 \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
             }
 
@@ -120,29 +120,30 @@ class TradingWebhookController extends Controller
 
             // Match based on MT4's actual typeStr payload
             if (in_array($type, ['buy', 'sell'])) {
-                $msg .= "🚨 <b>NEW ORDER OPENED</b> 🚨\n";
-                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
-                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
-                $msg .= "⚖️ Lot: {$lot}\n";
-                $msg .= "🎯 Entry: {$entry}\n";
-                $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
+                $msg .= "<b>[🟢 ORDER OPENED]</b>\n";
+                $msg .= "Pair: <b>{$symbol}</b>\n";
+                $msg .= "Type: {$typeUpper}\n";
+                $msg .= "Lot: {$lot}\n";
+                $msg .= "Entry: {$entry}\n";
+                $msg .= "SL: {$sl} | TP: {$tp}\n";
             } elseif (in_array($type, ['buy_closed', 'sell_closed'])) {
-                $msg .= "🏁 <b>TRADE CLOSED</b> 🏁\n";
-                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
-                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
-                $msg .= "⚖️ Lot: {$lot}\n";
-                $msg .= "🚪 Close Price: " . ($validated['close_price'] ?? 0) . "\n";
+                $msg .= "<b>[🏁 TRADE CLOSED]</b>\n";
+                $msg .= "Pair: <b>{$symbol}</b>\n";
+                $msg .= "Type: {$typeUpper}\n";
+                $msg .= "Lot: {$lot}\n";
+                $msg .= "Close Price: " . ($validated['close_price'] ?? 0) . "\n";
                 
-                $emoji = $profit >= 0 ? "🟩" : "🟥";
-                $msg .= "💲 Profit/Loss: {$emoji} <b>$" . number_format($profit, 2) . "</b>\n";
-                $msg .= "💼 Balance: $" . number_format($bal, 2) . "\n";
+                $sign = $profit >= 0 ? "+" : "-";
+                $absProfit = abs($profit);
+                $msg .= "Profit/Loss: {$sign} <b>$" . number_format($absProfit, 2) . "</b>\n";
+                $msg .= "Balance: $" . number_format($bal, 2) . "\n";
             } elseif (in_array($type, ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'])) {
-                $msg .= "⏳ <b>PENDING ORDER PLACED</b> ⏳\n";
-                $msg .= "🏷️ Pair: <b>{$symbol}</b>\n";
-                $msg .= "📈 Type: <b>{$typeUpper}</b>\n";
-                $msg .= "⚖️ Lot: {$lot}\n";
-                $msg .= "🎯 Target Entry: {$entry}\n";
-                $msg .= "🛑 SL: {$sl} | 💰 TP: {$tp}\n";
+                $msg .= "<b>[⌛ PENDING ORDER]</b>\n";
+                $msg .= "Pair: <b>{$symbol}</b>\n";
+                $msg .= "Type: {$typeUpper}\n";
+                $msg .= "Lot: {$lot}\n";
+                $msg .= "Target Entry: {$entry}\n";
+                $msg .= "SL: {$sl} | TP: {$tp}\n";
             }
 
             // DEDUPLICATE: Notify only on a real state change:
