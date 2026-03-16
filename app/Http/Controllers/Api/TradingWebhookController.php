@@ -215,8 +215,19 @@ class TradingWebhookController extends Controller
             // Repeated webhooks with identical data will silently skip the notification.
             $shouldNotify = $log->wasRecentlyCreated || $log->wasChanged('type');
 
+            Log::info("[Telegram Routing] wasRecentlyCreated: " . ($log->wasRecentlyCreated ? 'true' : 'false')
+                . ", wasChanged(type): " . ($log->wasChanged('type') ? 'true' : 'false')
+                . ", shouldNotify: " . ($shouldNotify ? 'true' : 'false')
+                . ", msg_empty: " . ($msg === '' ? 'true' : 'false'));
+
             if ($msg !== "" && !empty($targetChatId) && $shouldNotify) {
-                \App\Services\TelegramService::sendMessage($msg, $targetChatId);
+                Log::info("[Telegram Routing] Attempting sendMessage to: '{$targetChatId}'");
+                $sent = \App\Services\TelegramService::sendMessage($msg, $targetChatId);
+                Log::info("[Telegram Routing] sendMessage result: " . ($sent ? 'OK' : 'FAILED'));
+            } else {
+                Log::info("[Telegram Routing] sendMessage SKIPPED — msg_empty: " . ($msg === '' ? 'true' : 'false')
+                    . ", targetChatId_empty: " . (empty($targetChatId) ? 'true' : 'false')
+                    . ", shouldNotify: " . ($shouldNotify ? 'true' : 'false'));
             }
             
             Log::info("Webhook received and saved for ticket: " . $validated['ticket_id']);
