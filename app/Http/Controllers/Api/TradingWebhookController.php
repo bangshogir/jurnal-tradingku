@@ -75,15 +75,20 @@ class TradingWebhookController extends Controller
             $accountLabel = '';
 
             if ($accName) {
-                // EA sends "LoginNumber - ServerName". Extract numeric login part for matching.
-                $accountLogin = trim(explode('-', $accName)[0]);
+                // Extract leading numeric part from "141074764 - ServerName"
+                preg_match('/^(\d+)/', $accName, $matches);
+                $accountLogin = $matches[1] ?? $accName;
+
+                Log::info("[Telegram Routing] pending_cancel — accName: '{$accName}', accountLogin: '{$accountLogin}'");
 
                 $route = \App\Models\TelegramRouting::where('user_id', $user->id)
                     ->where(function($q) use ($accName, $accountLogin) {
                         $q->where('account_number', $accName)
                           ->orWhere('account_number', $accountLogin);
                     })->first();
-                
+
+                Log::info("[Telegram Routing] Route found: " . ($route ? "YES → chat_id: {$route->telegram_chat_id}" : "NO → using default: {$user->telegram_chat_id}"));
+
                 if ($route && !empty($route->telegram_chat_id)) {
                     $targetChatId = $route->telegram_chat_id;
                     $accountLabel = $route->description ? $route->description : "Acc: {$accountLogin}";
@@ -146,15 +151,20 @@ class TradingWebhookController extends Controller
             $accountLabel = '';
 
             if ($accName) {
-                // EA sends "LoginNumber - ServerName". Extract numeric login part for matching.
-                $accountLogin = trim(explode('-', $accName)[0]);
+                // Extract leading numeric part from "141074764 - ServerName"
+                preg_match('/^(\d+)/', $accName, $matches);
+                $accountLogin = $matches[1] ?? $accName;
+
+                Log::info("[Telegram Routing] type: {$type} — accName: '{$accName}', accountLogin: '{$accountLogin}'");
 
                 $route = \App\Models\TelegramRouting::where('user_id', $user->id)
                     ->where(function($q) use ($accName, $accountLogin) {
                         $q->where('account_number', $accName)
                           ->orWhere('account_number', $accountLogin);
                     })->first();
-                
+
+                Log::info("[Telegram Routing] Route found: " . ($route ? "YES → chat_id: {$route->telegram_chat_id}" : "NO → using default: {$user->telegram_chat_id}"));
+
                 if ($route && !empty($route->telegram_chat_id)) {
                     $targetChatId = $route->telegram_chat_id;
                     $accountLabel = $route->description ? $route->description : "Acc: {$accountLogin}";
@@ -162,6 +172,8 @@ class TradingWebhookController extends Controller
                     $accountLabel = "Acc: {$accountLogin}";
                 }
             }
+
+            Log::info("[Telegram Routing] Final targetChatId: '{$targetChatId}', shouldNotify will depend on wasRecentlyCreated/wasChanged");
 
             $msg = "";
             $typeUpper = strtoupper($type);
