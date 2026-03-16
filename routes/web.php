@@ -23,6 +23,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/pending', [DashboardController::class, 'pendingOrders'])->name('dashboard.pending');
     Route::get('/open', [DashboardController::class, 'openOrders'])->name('dashboard.open');
+    Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
     Route::post('/profile/telegram', [DashboardController::class, 'updateTelegram'])->name('profile.telegram');
 
     // Telegram Routing endpoints

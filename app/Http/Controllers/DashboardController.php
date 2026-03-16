@@ -137,9 +137,6 @@ class DashboardController extends Controller
         // Real balance from MT5
         $currentBalance = Auth::user()->balance;
 
-        // Telegram Routings
-        $telegramRoutings = \App\Models\TelegramRouting::where('user_id', Auth::id())->get();
-
         return view('dashboard', compact(
             'trades',
             'totalTrades',
@@ -155,9 +152,14 @@ class DashboardController extends Controller
             'currentBalance',
             'chartData',
             'filter',
-            'dateFilter',
-            'telegramRoutings'
+            'dateFilter'
         ));
+    }
+
+    public function settings()
+    {
+        $telegramRoutings = \App\Models\TelegramRouting::where('user_id', Auth::id())->get();
+        return view('settings', compact('telegramRoutings'));
     }
 
     public function pendingOrders()
