@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\TelegramRoutingController; // Added for new routes
 
 // ─── Auth Routes ────────────────────────────────────────────
 Route::middleware('guest')->group(function () {
@@ -23,6 +24,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/pending', [DashboardController::class, 'pendingOrders'])->name('dashboard.pending');
     Route::get('/open', [DashboardController::class, 'openOrders'])->name('dashboard.open');
     Route::post('/profile/telegram', [DashboardController::class, 'updateTelegram'])->name('profile.telegram');
+
+    // Telegram Routing endpoints
+    Route::post('/telegram-routings', [TelegramRoutingController::class, 'store'])->name('telegram-routings.store');
+    Route::delete('/telegram-routings/{telegramRouting}', [TelegramRoutingController::class, 'destroy'])->name('telegram-routings.destroy');
 });
 
 // ─── Admin Routes ────────────────────────────────────────────

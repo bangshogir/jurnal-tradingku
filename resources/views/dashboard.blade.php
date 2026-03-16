@@ -207,6 +207,77 @@
         @endforeach
     </dl>
 
+    {{-- Telegram Account Routing Section --}}
+    <div class="mb-8">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 tracking-tight">Telegram Account Routing</h2>
+                    <p class="text-sm text-slate-500 mt-1">Route notifications from specific MT4/MT5 accounts to different Telegram Groups/Channels.</p>
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50">
+                <form action="{{ route('telegram-routings.store') }}" method="POST" class="flex flex-col sm:flex-row gap-4 items-end">
+                    @csrf
+                    <div class="flex-1 w-full">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Account Number</label>
+                        <input type="text" name="account_number" required placeholder="e.g 1234567"
+                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                    </div>
+                    <div class="flex-1 w-full">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Target Chat ID</label>
+                        <input type="text" name="telegram_chat_id" required placeholder="e.g -100987654321"
+                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                    </div>
+                    <div class="flex-1 w-full">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Description (Optional)</label>
+                        <input type="text" name="description" placeholder="e.g Live Account"
+                            class="w-full text-sm placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 border-slate-200 rounded-lg shadow-sm">
+                    </div>
+                    <div class="w-full sm:w-auto">
+                        <button type="submit"
+                            class="w-full px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 shadow-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
+                            Add Route
+                        </button>
+                    </div>
+                </form>
+
+                @if($telegramRoutings && $telegramRoutings->count() > 0)
+                <div class="mt-6 border border-slate-200 rounded-xl bg-white overflow-hidden">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-[11px] text-slate-500 font-semibold tracking-wider uppercase border-b border-slate-200">
+                            <tr>
+                                <th class="px-5 py-3 text-left">Account Number</th>
+                                <th class="px-5 py-3 text-left">Target Chat ID</th>
+                                <th class="px-5 py-3 text-left">Description</th>
+                                <th class="px-5 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach($telegramRoutings as $route)
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="px-5 py-3 text-slate-900 font-medium">{{ $route->account_number }}</td>
+                                <td class="px-5 py-3 text-slate-600 font-mono text-xs">{{ $route->telegram_chat_id }}</td>
+                                <td class="px-5 py-3 text-slate-500">{{ $route->description ?? '-' }}</td>
+                                <td class="px-5 py-3 text-right">
+                                    <form action="{{ route('telegram-routings.destroy', $route) }}" method="POST" class="inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-rose-500 hover:text-rose-700 font-medium text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition-colors">
+                                            Remove
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @endif
+            </div>
+        </div>
+    </div>
+
     {{-- Trade History Table / Last Sales style --}}
     <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-bold text-slate-900 tracking-tight">Trade History</h2>

@@ -54,6 +54,7 @@ class TradingWebhookController extends Controller
             'open_time'    => 'nullable|date',
             'close_time'   => 'nullable|date',
             'balance'      => 'nullable|numeric',   // MT5 AccountInfoDouble(ACCOUNT_BALANCE)
+            'account_name' => 'nullable|string',
         ]);
 
         // Update the user's balance from MT5 whenever data is received
@@ -68,12 +69,32 @@ class TradingWebhookController extends Controller
                 ->where('ticket_id', $validated['ticket_id'])
                 ->delete();
             
+            // Determine target Telegram Chat ID based on Account Routing
+            $targetChatId = $user->telegram_chat_id; // Fallback
+            $accName = $validated['account_name'] ?? null;
+            $accountLabel = '';
+
+            if ($accName) {
+                // Check if user defined a custom route for this specific account
+                $route = \App\Models\TelegramRouting::where('user_id', $user->id)
+                    ->where('account_number', $accName)
+                    ->first();
+                
+                if ($route && !empty($route->telegram_chat_id)) {
+                    $targetChatId = $route->telegram_chat_id;
+                    $accountLabel = $route->description ? $route->description : "Acc: {$accName}";
+                } else {
+                    $accountLabel = "Acc: {$accName}";
+                }
+            }
+
             // Only notify once — when we actually deleted the record (first webhook to arrive)
-            if ($deleted > 0 && !empty($user->telegram_chat_id)) {
+            if ($deleted > 0 && !empty($targetChatId)) {
                 $msg = "<b>[🗑️ PENDING CANCELED]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
                 $msg .= "Pair: <b>{$validated['symbol']}</b>\n";
                 $msg .= "Ticket: {$validated['ticket_id']}\n";
-                \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
+                \App\Services\TelegramService::sendMessage($msg, $targetChatId);
             }
 
             Log::info("Webhook received: Pending order cancelled for ticket: " . $validated['ticket_id']);
@@ -115,12 +136,31 @@ class TradingWebhookController extends Controller
             $profit = $validated['profit_loss'] ?? 0;
             $bal = $user->balance ?? 0;
 
+            // Determine target Telegram Chat ID based on Account Routing
+            $targetChatId = $user->telegram_chat_id; // Fallback
+            $accName = $validated['account_name'] ?? null;
+            $accountLabel = '';
+
+            if ($accName) {
+                $route = \App\Models\TelegramRouting::where('user_id', $user->id)
+                    ->where('account_number', $accName)
+                    ->first();
+                
+                if ($route && !empty($route->telegram_chat_id)) {
+                    $targetChatId = $route->telegram_chat_id;
+                    $accountLabel = $route->description ? $route->description : "Acc: {$accName}";
+                } else {
+                    $accountLabel = "Acc: {$accName}";
+                }
+            }
+
             $msg = "";
             $typeUpper = strtoupper($type);
 
             // Match based on MT4's actual typeStr payload
             if (in_array($type, ['buy', 'sell'])) {
                 $msg .= "<b>[🟢 ORDER OPENED]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
@@ -128,6 +168,7 @@ class TradingWebhookController extends Controller
                 $msg .= "SL: {$sl} | TP: {$tp}\n";
             } elseif (in_array($type, ['buy_closed', 'sell_closed'])) {
                 $msg .= "<b>[🏁 TRADE CLOSED]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
@@ -139,6 +180,7 @@ class TradingWebhookController extends Controller
                 $msg .= "Balance: $" . number_format($bal, 2) . "\n";
             } elseif (in_array($type, ['buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'])) {
                 $msg .= "<b>[⌛ PENDING ORDER]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
                 $msg .= "Pair: <b>{$symbol}</b>\n";
                 $msg .= "Type: {$typeUpper}\n";
                 $msg .= "Lot: {$lot}\n";
@@ -152,8 +194,8 @@ class TradingWebhookController extends Controller
             // Repeated webhooks with identical data will silently skip the notification.
             $shouldNotify = $log->wasRecentlyCreated || $log->wasChanged('type');
 
-            if ($msg !== "" && !empty($user->telegram_chat_id) && $shouldNotify) {
-                \App\Services\TelegramService::sendMessage($msg, $user->telegram_chat_id);
+            if ($msg !== "" && !empty($targetChatId) && $shouldNotify) {
+                \App\Services\TelegramService::sendMessage($msg, $targetChatId);
             }
             
             Log::info("Webhook received and saved for ticket: " . $validated['ticket_id']);
