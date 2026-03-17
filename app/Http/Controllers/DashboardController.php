@@ -162,6 +162,39 @@ class DashboardController extends Controller
         return view('settings', compact('telegramRoutings'));
     }
 
+    public function reports()
+    {
+        $userId = Auth::id();
+
+        // 1. Daily Profit/Loss for current month
+        $startOfMonth = now()->startOfMonth();
+        $endOfMonth = now()->endOfMonth();
+
+        $dailyTrades = TradingLog::where('user_id', $userId)
+            ->whereIn('type', ['buy_closed', 'sell_closed'])
+            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+            ->selectRaw('DATE(created_at) as date, SUM(profit_loss) as total_profit')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date')
+            ->map(function ($item) {
+                return $item->total_profit;
+            })->toArray();
+
+        // 2. Win / Loss breakdown per Pair (symbol)
+        $pairStats = TradingLog::where('user_id', $userId)
+            ->whereIn('type', ['buy_closed', 'sell_closed'])
+            ->selectRaw('symbol, 
+                SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) as wins, 
+                SUM(CASE WHEN profit_loss <= 0 THEN 1 ELSE 0 END) as losses,
+                SUM(profit_loss) as total_profit')
+            ->groupBy('symbol')
+            ->orderByDesc('total_profit')
+            ->get();
+
+        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth'));
+    }
+
     public function pendingOrders()
     {
         // Get all pending orders (limit/stop) for the logged in user
