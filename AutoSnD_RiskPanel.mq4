@@ -451,7 +451,8 @@ void InitialHistorySync()
    for(int i=0; i<ArraySize(outDeals); i++) {
         if(OrderSelect(outDeals[i], SELECT_BY_TICKET, MODE_HISTORY)) {
             int ot = OrderType();
-            if(ot <= OP_SELL) SendTradeDataToWebhook(outDeals[i], "deal_close");
+            if(ot == 6) SendTradeDataToWebhook(outDeals[i], "balance");
+            else if(ot <= OP_SELL) SendTradeDataToWebhook(outDeals[i], "deal_close");
             else SendTradeDataToWebhook(outDeals[i], "pending_cancel");
         }
    }

@@ -433,8 +433,9 @@ void ResyncHistory()
    if(InpResyncDays <= 0 || InpWebhookURL == "") return;
    datetime to = TimeCurrent() + 86400; datetime from = TimeCurrent() - (InpResyncDays * 86400);
    
-   // 1. Collect all OUT deals (closed trades) safely
+   // 1. Collect all OUT deals (closed trades) and BALANCE deals safely
    ulong outDeals[];
+   ulong balanceDeals[];
    if(HistorySelect(from, to)) {
       int total = HistoryDealsTotal();
       for(int i = 0; i < total; i++) {
@@ -443,11 +444,18 @@ void ResyncHistory()
              int size = ArraySize(outDeals);
              ArrayResize(outDeals, size + 1);
              outDeals[size] = t;
+         } else if (HistoryDealGetInteger(t, DEAL_TYPE) == DEAL_TYPE_BALANCE) {
+             int size = ArraySize(balanceDeals);
+             ArrayResize(balanceDeals, size + 1);
+             balanceDeals[size] = t;
          }
       }
    }
    for(int i = 0; i < ArraySize(outDeals); i++) {
       SendTradeDataToWebhook(outDeals[i], "deal_close");
+   }
+   for(int i = 0; i < ArraySize(balanceDeals); i++) {
+      SendTradeDataToWebhook(balanceDeals[i], "balance");
    }
 
    // 2. Collect all Open Positions safely
