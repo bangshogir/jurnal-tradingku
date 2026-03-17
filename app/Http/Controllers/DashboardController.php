@@ -215,7 +215,11 @@ class DashboardController extends Controller
 
         $pairStats = $pairStatsQuery->get();
 
-        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'sort'));
+        // 3. Deposit & Withdrawal (All-Time)
+        $totalDeposit = TradingLog::where('user_id', $userId)->where('type', 'deposit')->sum('profit_loss');
+        $totalWithdrawal = TradingLog::where('user_id', $userId)->where('type', 'withdrawal')->sum('profit_loss');
+
+        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'sort', 'totalDeposit', 'totalWithdrawal'));
     }
 
     public function pendingOrders()

@@ -207,6 +207,20 @@ class TradingWebhookController extends Controller
                 $msg .= "Lot: {$lot}\n";
                 $msg .= "Target Entry: {$entry}\n";
                 $msg .= "SL: {$sl} | TP: {$tp}\n";
+            } elseif (in_array($type, ['deposit', 'withdrawal'])) {
+                $icon = $type === 'deposit' ? '💰' : '💸';
+                $titleText = strtoupper($type);
+                $msg .= "<b>[{$icon} {$titleText}]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
+                
+                $sign = $profit >= 0 ? "+" : "-";
+                $absProfit = abs($profit);
+                $msg .= "Amount: {$sign} <b>$" . number_format($absProfit, 2) . "</b>\n";
+                
+                if (!empty($validated['comment'])) {
+                    $msg .= "Comment: {$validated['comment']}\n";
+                }
+                $msg .= "New Balance: $" . number_format($bal, 2) . "\n";
             }
 
             // DEDUPLICATE: Notify only on a real state change:

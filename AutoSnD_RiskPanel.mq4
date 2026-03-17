@@ -139,6 +139,7 @@ string NextID() { return IntegerToString(++g_obj_id); }
 
 // Global Webhook Event Poller Array
 int g_active_tickets[];
+int g_last_history_total = 0;
 
 //=====================================================================
 // [2] LOT CALCULATION
@@ -369,12 +370,24 @@ void SendTradeDataToWebhook(int ticket, string eventType)
       else if(ot == OP_SELLSTOP) typeStr = "sell_stop";
    }
    
-   entryPrice = OrderOpenPrice(); closePrice = OrderClosePrice();
-   slPrice = OrderStopLoss(); tpPrice = OrderTakeProfit();
-   lotSize = OrderLots(); profitLoss = OrderProfit();
-   swap = OrderSwap(); commission = OrderCommission();
-   magicNumber = OrderMagicNumber(); comment = OrderComment();
-   openTime = OrderOpenTime(); closeTime = OrderCloseTime();
+   }
+   
+   if (eventType == "balance") {
+      typeStr = (OrderProfit() >= 0) ? "deposit" : "withdrawal";
+      entryPrice = 0; closePrice = 0; slPrice = 0; tpPrice = 0;
+      lotSize = 0; profitLoss = OrderProfit();
+      swap = 0; commission = 0; magicNumber = 0;
+      comment = OrderComment();
+      openTime = OrderOpenTime(); closeTime = openTime;
+      symbol = "";
+   } else {
+      entryPrice = OrderOpenPrice(); closePrice = OrderClosePrice();
+      slPrice = OrderStopLoss(); tpPrice = OrderTakeProfit();
+      lotSize = OrderLots(); profitLoss = OrderProfit();
+      swap = OrderSwap(); commission = OrderCommission();
+      magicNumber = OrderMagicNumber(); comment = OrderComment();
+      openTime = OrderOpenTime(); closeTime = OrderCloseTime();
+   }
    string oTS = (openTime > 0) ? TimeToString(openTime, TIME_DATE | TIME_SECONDS) : "";
    string cTS = (closeTime > 0) ? TimeToString(closeTime, TIME_DATE | TIME_SECONDS) : "";
    StringReplace(oTS, ".", "-"); StringReplace(cTS, ".", "-");
@@ -490,6 +503,19 @@ void PollTradeEvents()
                else SendTradeDataToWebhook(old_tk, "pending_cancel");
            }
        }
+   }
+   
+   // Check for new deposits/withdrawals in History
+   int histTotal = OrdersHistoryTotal();
+   if(histTotal > g_last_history_total) {
+       for(int i = g_last_history_total; i < histTotal; i++) {
+           if(OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) {
+               if(OrderType() == 6) { // OP_BALANCE
+                   SendTradeDataToWebhook(OrderTicket(), "balance");
+               }
+           }
+       }
+       g_last_history_total = histTotal;
    }
    
    ArrayResize(g_active_tickets, ArraySize(current_tickets));

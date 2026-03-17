@@ -385,6 +385,17 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
       magicNumber = isCancel ? HistoryOrderGetInteger(ticket, ORDER_MAGIC) : OrderGetInteger(ORDER_MAGIC);
       comment = isCancel ? HistoryOrderGetString(ticket, ORDER_COMMENT) : OrderGetString(ORDER_COMMENT);
      }
+   else if(eventType == "balance")
+     {
+      if(!HistoryDealSelect(ticket)) return;
+      dealType = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      profitLoss = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+      typeStr = (profitLoss >= 0) ? "deposit" : "withdrawal";
+      openTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+      closeTime = openTime;
+      comment = HistoryDealGetString(ticket, DEAL_COMMENT);
+      symbol = ""; lotSize = 0; entryPrice = 0; closePrice = 0; slPrice = 0; tpPrice = 0; swap = 0; commission = 0; magicNumber = 0;
+     }
 
    string oTS = (openTime > 0) ? TimeToString(openTime, TIME_DATE | TIME_SECONDS) : "";
    string cTS = (closeTime > 0) ? TimeToString(closeTime, TIME_DATE | TIME_SECONDS) : "";
@@ -823,9 +834,14 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
   {
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD) {
       if(HistoryDealSelect(trans.deal)) {
-         long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
-         if(entry == DEAL_ENTRY_OUT) SendTradeDataToWebhook(trans.deal, "deal_close");
-         else if(entry == DEAL_ENTRY_IN) SendTradeDataToWebhook(trans.deal, "deal_open");
+         long dealType = HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+         if(dealType == DEAL_TYPE_BALANCE) {
+            SendTradeDataToWebhook(trans.deal, "balance");
+         } else {
+            long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+            if(entry == DEAL_ENTRY_OUT) SendTradeDataToWebhook(trans.deal, "deal_close");
+            else if(entry == DEAL_ENTRY_IN) SendTradeDataToWebhook(trans.deal, "deal_open");
+         }
       }
    }
    if(trans.type == TRADE_TRANSACTION_ORDER_ADD) {

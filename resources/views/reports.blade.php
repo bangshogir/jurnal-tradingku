@@ -6,6 +6,29 @@
 
 @section('content')
 
+    {{-- DEPOSIT & WITHDRAWAL STATS --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-8">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+            <div class="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-slate-500 mb-1">Total Deposit (All Time)</p>
+                <h4 class="text-3xl font-bold text-slate-900">${{ number_format($totalDeposit, 2) }}</h4>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+            <div class="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-slate-500 mb-1">Total Withdrawal (All Time)</p>
+                <h4 class="text-3xl font-bold text-slate-900">-${{ number_format(abs($totalWithdrawal), 2) }}</h4>
+            </div>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {{-- CALENDAR HEATMAP --}}
