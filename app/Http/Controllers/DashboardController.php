@@ -162,7 +162,7 @@ class DashboardController extends Controller
         return view('settings', compact('telegramRoutings'));
     }
 
-    public function reports()
+    public function reports(\Illuminate\Http\Request $request)
     {
         $userId = Auth::id();
 
@@ -181,18 +181,41 @@ class DashboardController extends Controller
                 return $item->total_profit;
             })->toArray();
 
-        // 2. Win / Loss breakdown per Pair (symbol)
-        $pairStats = TradingLog::where('user_id', $userId)
+        $pairStatsQuery = TradingLog::where('user_id', $userId)
             ->whereIn('type', ['buy_closed', 'sell_closed'])
             ->selectRaw('symbol, 
                 SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) as wins, 
                 SUM(CASE WHEN profit_loss <= 0 THEN 1 ELSE 0 END) as losses,
                 SUM(profit_loss) as total_profit')
-            ->groupBy('symbol')
-            ->orderByDesc('total_profit')
-            ->get();
+            ->groupBy('symbol');
 
-        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth'));
+        // Apply sorting based on request
+        $sort = $request->input('sort', 'profit_desc'); // default sort
+        
+        switch ($sort) {
+            case 'wins_desc':
+                $pairStatsQuery->orderByDesc('wins');
+                break;
+            case 'losses_desc':
+                $pairStatsQuery->orderByDesc('losses');
+                break;
+            case 'profit_asc':
+                $pairStatsQuery->orderBy('total_profit', 'asc');
+                break;
+            case 'winrate_desc':
+                // (wins / (wins+losses)) sorting logic can't easily be done directly in eloquent 
+                // but we can sort by raw expression
+                $pairStatsQuery->orderByRaw('(SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) / COUNT(*)) DESC');
+                break;
+            case 'profit_desc':
+            default:
+                $pairStatsQuery->orderByDesc('total_profit');
+                break;
+        }
+
+        $pairStats = $pairStatsQuery->get();
+
+        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'sort'));
     }
 
     public function pendingOrders()

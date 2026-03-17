@@ -94,8 +94,25 @@
 
         {{-- PAIR STATS --}}
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div class="p-6 border-b border-slate-100">
+            <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h3 class="text-lg font-bold text-slate-900 tracking-tight">Statistik Pair (Win/Loss)</h3>
+                <form method="GET" action="{{ route('dashboard.reports') }}">
+                    <div class="relative">
+                        <select name="sort" onchange="this.form.submit()"
+                            class="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer">
+                            <option value="profit_desc" {{ $sort === 'profit_desc' ? 'selected' : '' }}>Tertinggi P/L</option>
+                            <option value="profit_asc" {{ $sort === 'profit_asc' ? 'selected' : '' }}>Terendah P/L</option>
+                            <option value="wins_desc" {{ $sort === 'wins_desc' ? 'selected' : '' }}>Terbanyak Win</option>
+                            <option value="losses_desc" {{ $sort === 'losses_desc' ? 'selected' : '' }}>Terbanyak Loss</option>
+                            <option value="winrate_desc" {{ $sort === 'winrate_desc' ? 'selected' : '' }}>Tertinggi Win Rate</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </form>
             </div>
             
             <div class="flex-1 overflow-auto">
