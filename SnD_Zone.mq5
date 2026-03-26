@@ -22,26 +22,12 @@ input group "--- Display ---"
 input bool   InpShowMitigated  = false; // Tampilkan Zona Termitigasi
 input bool   InpShowBOS        = true;  // Tampilkan Garis Break of Structure
 
-input group "--- Liquidity Settings ---"
-input double InpEQHLThreshold  = 0.1;  // Equal H/L Threshold (%)
-input bool   InpShowLiqLabels  = false; // Tampilkan Label Likuiditas (EQH/EQL/IDM/Sweep)
-input bool   InpLabelsCompact  = false; // Compact Labels (simbol saja)
-
 input group "--- Probability Filter ---"
-input bool   InpOnlyIDMZones   = false; // Hanya tampilkan Zona yang ada IDM
-
-input group "--- Colors ---"
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
 input color  InpMitColor       = clrGray;       // Warna Zona Mitigated
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
-input color  InpUltraColor     = clrGold;       // Warna Zona Ultra (IDM)
-
-#define COL_EQH    clrTomato
-#define COL_EQL    clrLimeGreen
-#define COL_IDM    clrAqua
-#define COL_SWEEP  clrOrchid
 
 //=====================================================================
 // ZONE STRUCT
@@ -57,8 +43,6 @@ struct ZoneData
    double   btm;
    datetime start_time;
    bool     active;
-   bool     has_idm;
-   bool     is_ultra;
   };
 
 #define MAX_ZONES    300
@@ -77,35 +61,10 @@ double   g_old_last_pl  = 0;
 datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
 
-double   g_ph_levels[MAX_LIQ_LVL];
-datetime g_ph_times [MAX_LIQ_LVL];
-int      g_ph_count = 0;
-
-double   g_pl_levels[MAX_LIQ_LVL];
-datetime g_pl_times [MAX_LIQ_LVL];
-int      g_pl_count = 0;
-
 //=====================================================================
 // HELPERS
 //=====================================================================
-bool IsNearEQ(double a, double b)
-  { if(b==0) return false; return (MathAbs(a-b)/b*100.0) <= InpEQHLThreshold; }
-
 string NextID() { return IntegerToString(++g_obj_id); }
-
-void PushPH(double price, datetime t)
-  {
-   if(g_ph_count >= MAX_LIQ_LVL)
-     { for(int i=0;i<MAX_LIQ_LVL-1;i++){g_ph_levels[i]=g_ph_levels[i+1];g_ph_times[i]=g_ph_times[i+1];} g_ph_count=MAX_LIQ_LVL-1; }
-   g_ph_levels[g_ph_count]=price; g_ph_times[g_ph_count]=t; g_ph_count++;
-  }
-
-void PushPL(double price, datetime t)
-  {
-   if(g_pl_count >= MAX_LIQ_LVL)
-     { for(int i=0;i<MAX_LIQ_LVL-1;i++){g_pl_levels[i]=g_pl_levels[i+1];g_pl_times[i]=g_pl_times[i+1];} g_pl_count=MAX_LIQ_LVL-1; }
-   g_pl_levels[g_pl_count]=price; g_pl_times[g_pl_count]=t; g_pl_count++;
-  }
 
 //=====================================================================
 // PIVOT DETECTION
@@ -135,48 +94,29 @@ int FindSupplyBase(int shift)
 //=====================================================================
 // DRAWING
 //=====================================================================
-void DrawLiqLabel(string txt_full, string txt_compact, color col, double price, datetime t, bool above)
-  {
-   if(!InpShowLiqLabels) return;
-   string name = "SnD_LL_" + NextID();
-   string txt  = InpLabelsCompact ? txt_compact : txt_full;
-   if(ObjectCreate(0,name,OBJ_TEXT,0,t,price))
-     {
-      ObjectSetString(0,name,OBJPROP_TEXT,txt);
-      ObjectSetInteger(0,name,OBJPROP_COLOR,col);
-      ObjectSetInteger(0,name,OBJPROP_FONTSIZE,8);
-      ObjectSetInteger(0,name,OBJPROP_SELECTABLE,false);
-      ObjectSetInteger(0,name,OBJPROP_BACK,false);
-      double off = SymbolInfoDouble(_Symbol,SYMBOL_POINT)*15;
-      ObjectMove(0,name,0,t,above?price+off:price-off);
-     }
-  }
-
 void DrawZone(bool is_demand, double top, double btm, datetime start_time)
   {
    if(g_zone_count >= MAX_ZONES) return;
-   bool  hidden  = InpOnlyIDMZones;
-   color col_use = hidden ? clrNONE : (is_demand ? InpDemandColor : InpSupplyColor);
+   color col_use = is_demand ? InpDemandColor : InpSupplyColor;
    string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
 
    if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
      {
-      if(hidden) { ObjectSetInteger(0,rname,OBJPROP_COLOR,clrGray); ObjectSetInteger(0,rname,OBJPROP_FILL,false); }
-      else       { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); }
+      ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true);
       ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);
       ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits));
      }
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
      {
-      string lbl = hidden ? "" : (is_demand?" Origin Demand":" Origin Supply");
+      string lbl = is_demand?" Origin Demand":" Origin Supply";
       ObjectSetString(0,lname,OBJPROP_TEXT,lbl);
-      ObjectSetInteger(0,lname,OBJPROP_COLOR,hidden?clrNONE:col_use);
+      ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use);
       ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true);
      }
 
    // Label harga atas & bawah zona
    string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-   color  price_col = hidden ? clrNONE : col_use;
+   color  price_col = col_use;
    if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top))
      {
       ObjectSetString(0,ptop,OBJPROP_TEXT," "+DoubleToString(top,_Digits));
@@ -205,19 +145,8 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    g_zones[g_zone_count].btm        = btm;
    g_zones[g_zone_count].start_time = start_time;
    g_zones[g_zone_count].active     = true;
-   g_zones[g_zone_count].has_idm    = false;
-   g_zones[g_zone_count].is_ultra   = false;
+   g_zones[g_zone_count].active     = true;
    g_zone_count++;
-  }
-
-void UpgradeToUltra(int idx)
-  {
-   g_zones[idx].has_idm=true; g_zones[idx].is_ultra=true;
-   string lbl = g_zones[idx].is_demand?" \xE2\xAD\x90 Origin Demand":" \xE2\xAD\x90 Origin Supply";
-   ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpUltraColor); ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,true);
-   ObjectSetString(0,g_zones[idx].lbl_name,OBJPROP_TEXT,lbl); ObjectSetInteger(0,g_zones[idx].lbl_name,OBJPROP_COLOR,InpUltraColor);
-   ObjectSetInteger(0,g_zones[idx].lbl_top,OBJPROP_COLOR,InpUltraColor);
-   ObjectSetInteger(0,g_zones[idx].lbl_btm,OBJPROP_COLOR,InpUltraColor);
   }
 
 void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
@@ -280,36 +209,8 @@ void CheckMitigation(int shift)
      }
   }
 
-void CheckEQHL(bool is_ph, double price, datetime t)
-  {
-   if(!InpShowLiqLabels) return;
-   if(is_ph) { for(int k=g_ph_count-1;k>=MathMax(0,g_ph_count-5);k--) if(IsNearEQ(price,g_ph_levels[k])){DrawLiqLabel("$$ EQH","$$",COL_EQH,price,t,true);break;} }
-   else       { for(int k=g_pl_count-1;k>=MathMax(0,g_pl_count-5);k--) if(IsNearEQ(price,g_pl_levels[k])){DrawLiqLabel("$$ EQL","$$",COL_EQL,price,t,false);break;} }
-  }
-
-void CheckIDM(bool is_ph, double price, datetime t)
-  {
-   for(int i=0;i<g_zone_count;i++)
-     {
-      if(!g_zones[i].active||g_zones[i].has_idm||t<=g_zones[i].start_time) continue;
-      if(is_ph&&g_zones[i].is_demand&&price>g_zones[i].top&&g_old_last_ph>0&&price<g_old_last_ph)
-        { UpgradeToUltra(i); DrawLiqLabel("IDM","\xE2\x97\x86",COL_IDM,price,t,true); }
-      else if(!is_ph&&!g_zones[i].is_demand&&price<g_zones[i].btm&&g_old_last_pl>0&&price>g_old_last_pl)
-        { UpgradeToUltra(i); DrawLiqLabel("IDM","\xE2\x97\x86",COL_IDM,price,t,false); }
+      if(mit) MitigateZone(i,bt);
      }
-  }
-
-void CheckSweeps(int shift)
-  {
-   if(!InpShowLiqLabels) return;
-   double h=iHigh(_Symbol,_Period,shift), l=iLow(_Symbol,_Period,shift);
-   datetime bt=iTime(_Symbol,_Period,shift);
-   for(int k=g_ph_count-1;k>=0;k--)
-     if(g_ph_times[k]<bt&&h>g_ph_levels[k])
-       { DrawLiqLabel("\xE2\x9C\x97 Swept","\xE2\x9C\x97",COL_SWEEP,h,bt,true); for(int j=k;j<g_ph_count-1;j++){g_ph_levels[j]=g_ph_levels[j+1];g_ph_times[j]=g_ph_times[j+1];} g_ph_count--; break; }
-   for(int k=g_pl_count-1;k>=0;k--)
-     if(g_pl_times[k]<bt&&l<g_pl_levels[k])
-       { DrawLiqLabel("\xE2\x9C\x97 Swept","\xE2\x9C\x97",COL_SWEEP,l,bt,false); for(int j=k;j<g_pl_count-1;j++){g_pl_levels[j]=g_pl_levels[j+1];g_pl_times[j]=g_pl_times[j+1];} g_pl_count--; break; }
   }
 
 //=====================================================================
@@ -323,7 +224,6 @@ void ProcessBar(int shift)
    if(ph>0)
      {
       datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
-      CheckEQHL(true,ph,t); CheckIDM(true,ph,t); PushPH(ph,t);
       g_last_ph=ph; g_last_ph_time=t;
      }
 
@@ -331,7 +231,6 @@ void ProcessBar(int shift)
    if(pl>0)
      {
       datetime t=iTime(_Symbol,_Period,shift+InpPivotLB);
-      CheckEQHL(false,pl,t); CheckIDM(false,pl,t); PushPL(pl,t);
       g_last_pl=pl; g_last_pl_time=t;
      }
 
@@ -358,7 +257,6 @@ void ProcessBar(int shift)
       if(base!=-1) DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
      }
 
-   CheckSweeps(shift);
    CheckMitigation(shift);
   }
 

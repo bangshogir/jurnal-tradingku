@@ -81,9 +81,6 @@ input color   InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
 input color   InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color   InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
-#define COL_EQH    clrTomato
-#define COL_EQL    clrLimeGreen
-
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone)
 //=====================================================================
@@ -98,8 +95,6 @@ struct ZoneData
    double   btm;
    datetime start_time;
    bool     active;
-   bool     has_idm;
-   bool     is_ultra;
   };
 
 #define MAX_ZONES    300
@@ -543,7 +538,7 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
-   g_zones[g_zone_count].active=true; g_zones[g_zone_count].has_idm=false; g_zones[g_zone_count].is_ultra=false;
+   g_zones[g_zone_count].active=true;
    g_zone_count++;
   }
 
@@ -644,9 +639,17 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
    double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
    tpPrice = NormalizeDouble(tpPrice, digs);
    string comm = "SND_AUTO";
-   if(ExtPanel.m_cl_active) comm = "SND_CL_" + DoubleToString(stopLoss, digs);
-   bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, Symbol(), stopLoss, tpPrice, 0, 0, comm)
-                          : ExtTrade.SellLimit(lot, entryPrice, Symbol(), stopLoss, tpPrice, 0, 0, comm);
+   double backupSL = stopLoss; // By default, Hard SL is the calculated Stop Loss
+   
+   if(ExtPanel.m_cl_active)
+     {
+      comm = "SND_CL_" + DoubleToString(stopLoss, digs);
+      // Soft CL is active. Set Hard SL further away (2x distance) as a safety net.
+      backupSL = isDemand ? NormalizeDouble(entryPrice - diff * 2.0, digs) : NormalizeDouble(entryPrice + diff * 2.0, digs);
+     }
+     
+   bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm)
+                          : ExtTrade.SellLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm);
    if(result)
      {
       MarkZoneTraded(zoneTime);

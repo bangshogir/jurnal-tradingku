@@ -93,20 +93,32 @@ class DashboardController extends Controller
             ? round(($grossProfit / ($grossProfit + $grossLoss)) * 100, 2) 
             : 0;
 
-        // Max Drawdown & All Time High
-        $cumulative  = 0;
-        $peak        = 0;
-        $maxDrawdown = 0;
-        $allTimeHigh = 0;
-        foreach ($allTrades as $t) {
-            $cumulative += $t->profit_loss;
-            if ($cumulative > $peak) {
-                $peak = $cumulative;
+        // Calculate Max Drawdown & All Time High based on REAL balance history
+        $allFinancialEvents = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed', 'deposit', 'withdrawal'])
+            ->orderByRaw('COALESCE(close_time, created_at) ASC')
+            ->get();
+
+        $totalHistoricalChange = $allFinancialEvents->sum('profit_loss');
+        $currentBalance = Auth::user()->balance ?? 0;
+        $initialBalance = $currentBalance - $totalHistoricalChange;
+
+        $runningBalance = $initialBalance;
+        $peakBalance    = $runningBalance;
+        $maxDrawdownAmt = 0;
+        $allTimeHigh    = max(0, $runningBalance); // At least initial
+
+        foreach ($allFinancialEvents as $t) {
+            $runningBalance += $t->profit_loss;
+            if ($runningBalance > $peakBalance) {
+                $peakBalance = $runningBalance;
             }
-            $drawdown    = $peak - $cumulative;
-            $maxDrawdown = max($maxDrawdown, $drawdown);
-            $allTimeHigh = max($allTimeHigh, $cumulative);
+            $drawdownAmt = $peakBalance - $runningBalance;
+            $maxDrawdownAmt = max($maxDrawdownAmt, $drawdownAmt);
+            $allTimeHigh = max($allTimeHigh, $runningBalance);
         }
+        $maxDrawdown = round($maxDrawdownAmt, 2);
+        $allTimeHigh = round($allTimeHigh, 2);
         
         // Today calculations
         $todayStart = \Carbon\Carbon::today();
