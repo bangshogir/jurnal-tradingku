@@ -365,8 +365,6 @@ void SendTradeDataToWebhook(int ticket, string eventType)
       else if(ot == OP_SELLSTOP) typeStr = "sell_stop";
    }
    
-   }
-   
    if (eventType == "balance") {
       typeStr = (OrderProfit() >= 0) ? "deposit" : "withdrawal";
       entryPrice = 0; closePrice = 0; slPrice = 0; tpPrice = 0;
