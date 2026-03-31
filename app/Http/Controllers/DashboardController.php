@@ -23,33 +23,51 @@ class DashboardController extends Controller
                 if ($dateFilter === 'today') {
                     $query->whereDate('close_time', $now->toDateString())
                         ->orWhere(function ($sub) use ($now) {
-                            $sub->whereNull('close_time')->whereDate('created_at', $now->toDateString());
+                            $sub->whereNull('close_time')->whereDate('open_time', $now->toDateString())
+                                ->orWhere(function ($sub2) use ($now) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->whereDate('created_at', $now->toDateString());
+                                });
                         });
                 } elseif ($dateFilter === 'last_7_days') {
                     $query->where('close_time', '>=', $now->copy()->subDays(7))
                         ->orWhere(function ($sub) use ($now) {
-                            $sub->whereNull('close_time')->where('created_at', '>=', $now->copy()->subDays(7));
+                            $sub->whereNull('close_time')->where('open_time', '>=', $now->copy()->subDays(7))
+                                ->orWhere(function ($sub2) use ($now) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->where('created_at', '>=', $now->copy()->subDays(7));
+                                });
                         });
                 } elseif ($dateFilter === 'last_30_days') {
                     $query->where('close_time', '>=', $now->copy()->subDays(30))
                         ->orWhere(function ($sub) use ($now) {
-                            $sub->whereNull('close_time')->where('created_at', '>=', $now->copy()->subDays(30));
+                            $sub->whereNull('close_time')->where('open_time', '>=', $now->copy()->subDays(30))
+                                ->orWhere(function ($sub2) use ($now) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->where('created_at', '>=', $now->copy()->subDays(30));
+                                });
                         });
                 } elseif ($dateFilter === 'this_month') {
                     $query->whereMonth('close_time', $now->month)->whereYear('close_time', $now->year)
                         ->orWhere(function ($sub) use ($now) {
-                            $sub->whereNull('close_time')->whereMonth('created_at', $now->month)->whereYear('created_at', $now->year);
+                            $sub->whereNull('close_time')->whereMonth('open_time', $now->month)->whereYear('open_time', $now->year)
+                                ->orWhere(function ($sub2) use ($now) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->whereMonth('created_at', $now->month)->whereYear('created_at', $now->year);
+                                });
                         });
                 } elseif ($dateFilter === 'last_month') {
                     $lastMonth = $now->copy()->subMonth();
                     $query->whereMonth('close_time', $lastMonth->month)->whereYear('close_time', $lastMonth->year)
                         ->orWhere(function ($sub) use ($lastMonth) {
-                            $sub->whereNull('close_time')->whereMonth('created_at', $lastMonth->month)->whereYear('created_at', $lastMonth->year);
+                            $sub->whereNull('close_time')->whereMonth('open_time', $lastMonth->month)->whereYear('open_time', $lastMonth->year)
+                                ->orWhere(function ($sub2) use ($lastMonth) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->whereMonth('created_at', $lastMonth->month)->whereYear('created_at', $lastMonth->year);
+                                });
                         });
                 } elseif ($dateFilter === 'this_year') {
                     $query->whereYear('close_time', $now->year)
                         ->orWhere(function ($sub) use ($now) {
-                            $sub->whereNull('close_time')->whereYear('created_at', $now->year);
+                            $sub->whereNull('close_time')->whereYear('open_time', $now->year)
+                                ->orWhere(function ($sub2) use ($now) {
+                                    $sub2->whereNull('close_time')->whereNull('open_time')->whereYear('created_at', $now->year);
+                                });
                         });
                 }
             });
@@ -67,16 +85,16 @@ class DashboardController extends Controller
             $query->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed', 'pending_cancel']);
         }
 
-        // 1. Sort by newest date (close_time first, fallback created_at)
+        // 1. Sort by newest date (close_time first, fallback open_time, then created_at)
         // 2. Paginate
-        $trades = $query->orderByRaw('COALESCE(close_time, created_at) DESC')->paginate(10)->withQueryString();
+        $trades = $query->orderByRaw('COALESCE(close_time, open_time, created_at) DESC')->paginate(10)->withQueryString();
 
         // Calculate statistics based on all completed trades within the date filter
         $allTradesQuery = TradingLog::where('user_id', Auth::id())
             ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed']);
         $applyDateFilter($allTradesQuery);
-        // Order by close_time or created_at for accurate drawdown calculation
-        $allTrades = $allTradesQuery->orderByRaw('COALESCE(close_time, created_at) ASC')->get();
+        // Order by close_time or open_time or created_at for accurate drawdown calculation
+        $allTrades = $allTradesQuery->orderByRaw('COALESCE(close_time, open_time, created_at) ASC')->get();
 
         $totalTrades = $allTrades->count();
         $totalProfit = $allTrades->sum('profit_loss');
@@ -96,7 +114,7 @@ class DashboardController extends Controller
         // Calculate Max Drawdown & All Time High based on REAL balance history
         $allFinancialEvents = TradingLog::where('user_id', Auth::id())
             ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed', 'deposit', 'withdrawal'])
-            ->orderByRaw('COALESCE(close_time, created_at) ASC')
+            ->orderByRaw('COALESCE(close_time, open_time, created_at) ASC')
             ->get();
 
         $totalHistoricalChange = $allFinancialEvents->sum('profit_loss');
@@ -125,7 +143,7 @@ class DashboardController extends Controller
         
         // Trades closed today
         $todayTradesList = $allTrades->filter(function($trade) use ($todayStart) {
-            $dateToUse = $trade->close_time ? $trade->close_time : $trade->created_at;
+            $dateToUse = $trade->close_time ?? $trade->open_time ?? $trade->created_at;
             return $dateToUse >= $todayStart;
         });
         
@@ -137,7 +155,7 @@ class DashboardController extends Controller
         for ($i = 29; $i >= 0; $i--) {
             $day = \Carbon\Carbon::today()->subDays($i);
             $dayProfit = $allTrades->filter(function ($t) use ($day) {
-                $date = $t->close_time ?? $t->created_at;
+                $date = $t->close_time ?? $t->open_time ?? $t->created_at;
                 return $date && \Carbon\Carbon::parse($date)->isSameDay($day);
             })->sum('profit_loss');
             $chartData[] = [
@@ -184,8 +202,16 @@ class DashboardController extends Controller
 
         $dailyTrades = TradingLog::where('user_id', $userId)
             ->whereIn('type', ['buy_closed', 'sell_closed'])
-            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-            ->selectRaw('DATE(created_at) as date, SUM(profit_loss) as total_profit')
+            ->where(function ($query) use ($startOfMonth, $endOfMonth) {
+                $query->whereBetween('close_time', [$startOfMonth, $endOfMonth])
+                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
+                          $sub->whereNull('close_time')->whereBetween('open_time', [$startOfMonth, $endOfMonth]);
+                      })
+                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
+                          $sub->whereNull('close_time')->whereNull('open_time')->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
+                      });
+            })
+            ->selectRaw('DATE(COALESCE(close_time, open_time, created_at)) as date, SUM(profit_loss) as total_profit')
             ->groupBy('date')
             ->get()
             ->keyBy('date')
