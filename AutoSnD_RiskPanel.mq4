@@ -61,7 +61,7 @@ CTradeMT4 ExtTrade;
 input string  _sec1_ = "=== Risk Panel & Webhook ===";
 input string  InpWebhookURL = "http://jurnaltradingku.my.id/api/webhook/trading-log"; // Webhook URL
 input string  InpWebhookToken = "";                                                   // Webhook API Token
-input int     InpResyncDays = 7;                                                      // Auto Resync History (Days)
+input int     InpResyncDays = 365;                                                    // Auto Resync History (Days)
 
 input string  _sec2_ = "=== Auto Close Friday ===";
 input bool    InpEnableAutoCloseFriday = false; // Enable Auto Close Friday
