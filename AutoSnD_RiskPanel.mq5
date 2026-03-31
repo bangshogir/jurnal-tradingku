@@ -331,35 +331,42 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
 
    if(eventType == "deal_close")
      {
-      if(!HistoryDealSelect(ticket)) return;
-      symbol = HistoryDealGetString(ticket, DEAL_SYMBOL);
-      dealType = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      ulong dealTicket = ticket; // Save the original close deal ticket BEFORE any overwrite
+      if(!HistoryDealSelect(dealTicket)) return;
+      symbol = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+      dealType = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
       typeStr = (dealType == DEAL_TYPE_BUY) ? "buy_closed" : ((dealType == DEAL_TYPE_SELL) ? "sell_closed" : "other_closed");
-      closePrice = HistoryDealGetDouble(ticket, DEAL_PRICE);
-      lotSize = HistoryDealGetDouble(ticket, DEAL_VOLUME);
-      profitLoss = HistoryDealGetDouble(ticket, DEAL_PROFIT);
-      swap = HistoryDealGetDouble(ticket, DEAL_SWAP); commission = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
-      magicNumber = HistoryDealGetInteger(ticket, DEAL_MAGIC); comment = HistoryDealGetString(ticket, DEAL_COMMENT);
-      closeTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
-      long posID = HistoryDealGetInteger(ticket, DEAL_POSITION_ID); ticket = posID;
+      closePrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+      lotSize    = HistoryDealGetDouble(dealTicket, DEAL_VOLUME);
+      profitLoss = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+      swap       = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+      commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      magicNumber = HistoryDealGetInteger(dealTicket, DEAL_MAGIC);
+      comment    = HistoryDealGetString(dealTicket, DEAL_COMMENT);
+      closeTime  = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME); // Use dealTicket, NOT ticket
+      long posID = HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      ticket = posID; // Now it is safe to override ticket (used as the Laravel matching key)
       if(HistorySelectByPosition(posID)) {
          for(int i=0; i<HistoryDealsTotal(); i++) {
             ulong dt = HistoryDealGetTicket(i);
             if(HistoryDealGetInteger(dt, DEAL_ENTRY) == DEAL_ENTRY_IN) { entryPrice = HistoryDealGetDouble(dt, DEAL_PRICE); openTime = (datetime)HistoryDealGetInteger(dt, DEAL_TIME); break; }
          }
       }
-      closeTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
      }
    else if(eventType == "deal_open") // OPEN ORDER/POSITION
      {
-      if(!HistoryDealSelect(ticket)) return;
-      symbol = HistoryDealGetString(ticket, DEAL_SYMBOL);
-      dealType = HistoryDealGetInteger(ticket, DEAL_TYPE);
-      typeStr = (dealType == DEAL_TYPE_BUY) ? "buy" : ((dealType == DEAL_TYPE_SELL) ? "sell" : "other_open");
-      long posID = HistoryDealGetInteger(ticket, DEAL_POSITION_ID); ticket = posID;
-      entryPrice = HistoryDealGetDouble(ticket, DEAL_PRICE); lotSize = HistoryDealGetDouble(ticket, DEAL_VOLUME);
-      openTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME); magicNumber = HistoryDealGetInteger(ticket, DEAL_MAGIC);
-      comment = HistoryDealGetString(ticket, DEAL_COMMENT);
+      ulong dealTicket = ticket; // Save the original open deal ticket BEFORE any overwrite
+      if(!HistoryDealSelect(dealTicket)) return;
+      symbol   = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+      dealType = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+      typeStr  = (dealType == DEAL_TYPE_BUY) ? "buy" : ((dealType == DEAL_TYPE_SELL) ? "sell" : "other_open");
+      entryPrice  = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+      lotSize     = HistoryDealGetDouble(dealTicket, DEAL_VOLUME);
+      openTime    = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+      magicNumber = HistoryDealGetInteger(dealTicket, DEAL_MAGIC);
+      comment     = HistoryDealGetString(dealTicket, DEAL_COMMENT);
+      long posID  = HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      ticket = posID; // Override ticket with posID as the Laravel record key
       if(PositionSelectByTicket(posID)) { slPrice = PositionGetDouble(POSITION_SL); tpPrice = PositionGetDouble(POSITION_TP); }
      }
    else if(eventType == "pending_order" || eventType == "pending_cancel")

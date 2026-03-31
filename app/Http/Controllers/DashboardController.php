@@ -143,7 +143,11 @@ class DashboardController extends Controller
         
         // Trades closed today
         $todayTradesList = $allTrades->filter(function($trade) use ($todayStart) {
-            $dateToUse = $trade->close_time ?? $trade->open_time ?? $trade->created_at;
+            $dateToUse = $trade->close_time ?? $trade->open_time;
+            if (!$dateToUse && in_array($trade->type, ['buy_closed', 'sell_closed', 'other_closed'])) {
+                return false; // Prevent missing-date historical trades from showing up as today
+            }
+            $dateToUse = $dateToUse ?? $trade->created_at;
             return $dateToUse >= $todayStart;
         });
         

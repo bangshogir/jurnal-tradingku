@@ -112,28 +112,30 @@ class TradingWebhookController extends Controller
 
         // Save or Update to Database (State Machine: Pending -> Open -> Closed)
         try {
-            $log = TradingLog::updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'ticket_id' => $validated['ticket_id'], // MT5 Order Ticket / Position ID
-                ],
-                [
-                    'symbol' => $validated['symbol'],
-                    'type' => $validated['type'],
-                    'entry_price' => $validated['entry_price'] ?? 0,
-                    'close_price' => $validated['close_price'] ?? 0,
-                    'sl_price' => $validated['sl_price'] ?? 0,
-                    'tp_price' => $validated['tp_price'] ?? 0,
-                    'lot_size' => $validated['lot_size'] ?? 0,
-                    'profit_loss' => $validated['profit_loss'] ?? 0,
-                    'open_time' => $validated['open_time'] ?? null,
-                    'close_time' => $validated['close_time'] ?? null,
-                    'swap' => $validated['swap'] ?? 0,
-                    'commission' => $validated['commission'] ?? 0,
-                    'magic_number' => $validated['magic_number'] ?? '',
-                    'comment' => $validated['comment'] ?? '',
-                ]
-            );
+            $log = TradingLog::firstOrNew([
+                'user_id' => $user->id,
+                'ticket_id' => $validated['ticket_id'], // MT5/MT4 Order Ticket / Position ID
+            ]);
+
+            // Mandatory fields
+            $log->symbol = $validated['symbol'];
+            $log->type = $validated['type'];
+
+            // Optional fields (Only update if they were provided in the payload to prevent wiping out data)
+            if (array_key_exists('entry_price', $validated)) $log->entry_price = $validated['entry_price'];
+            if (array_key_exists('close_price', $validated)) $log->close_price = $validated['close_price'];
+            if (array_key_exists('sl_price', $validated)) $log->sl_price = $validated['sl_price'];
+            if (array_key_exists('tp_price', $validated)) $log->tp_price = $validated['tp_price'];
+            if (array_key_exists('lot_size', $validated)) $log->lot_size = $validated['lot_size'];
+            if (array_key_exists('profit_loss', $validated)) $log->profit_loss = $validated['profit_loss'];
+            if (array_key_exists('open_time', $validated)) $log->open_time = $validated['open_time'];
+            if (array_key_exists('close_time', $validated)) $log->close_time = $validated['close_time'];
+            if (array_key_exists('swap', $validated)) $log->swap = $validated['swap'];
+            if (array_key_exists('commission', $validated)) $log->commission = $validated['commission'];
+            if (array_key_exists('magic_number', $validated)) $log->magic_number = $validated['magic_number'];
+            if (array_key_exists('comment', $validated)) $log->comment = $validated['comment'];
+
+            $log->save();
 
             // TELEGRAM NOTIFICATION
             $type = $validated['type'];
