@@ -429,47 +429,63 @@ void InitialHistorySync()
   {
    if(InpResyncDays <= 0 || InpWebhookURL == "") return;
    datetime from = TimeCurrent() - (InpResyncDays * 86400);
+   Print("InitialHistorySync: starting sync for last ", InpResyncDays, " days...");
 
-   int outDeals[];
+   // -----------------------------------------------------------------------
+   // STEP 1: Send all closed trades and balance entries from history
+   // -----------------------------------------------------------------------
+   int closedCount = 0;
+   int balanceCount = 0;
    int histTotal = OrdersHistoryTotal();
-   for(int i = 0; i < histTotal; i++) {
-       if(OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) {
-           if(OrderCloseTime() >= from) {
-               int size = ArraySize(outDeals);
-               ArrayResize(outDeals, size + 1);
-               outDeals[size] = OrderTicket();
-           }
-       }
-   }
-   for(int i=0; i<ArraySize(outDeals); i++) {
-        if(OrderSelect(outDeals[i], SELECT_BY_TICKET, MODE_HISTORY)) {
-            int ot = OrderType();
-            if(ot == 6) SendTradeDataToWebhook(outDeals[i], "balance");
-            else if(ot <= OP_SELL) SendTradeDataToWebhook(outDeals[i], "deal_close");
-            else SendTradeDataToWebhook(outDeals[i], "pending_cancel");
+   for(int i = 0; i < histTotal; i++)
+     {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) continue;
+      int ot = OrderType();
+      datetime closeT = OrderCloseTime();
+      // Include if: (1) close_time is in range, OR (2) it's an open position (close_time == 0)
+      if(closeT < from && closeT != 0) continue;
+      if(ot == 6) // OP_BALANCE
+        {
+         SendTradeDataToWebhook(OrderTicket(), "balance");
+         balanceCount++;
         }
-   }
+      else if(ot <= OP_SELL)
+        {
+         SendTradeDataToWebhook(OrderTicket(), "deal_close");
+         closedCount++;
+        }
+      else
+        {
+         SendTradeDataToWebhook(OrderTicket(), "pending_cancel");
+        }
+     }
+   Print("InitialHistorySync: sent ", closedCount, " closed trades, ", balanceCount, " balance entries.");
 
-   // Initialize active tickets tracker
+   // -----------------------------------------------------------------------
+   // STEP 2: Send all currently open positions
+   // -----------------------------------------------------------------------
    ArrayResize(g_active_tickets, 0);
    int current_tickets[];
-   for(int i = 0; i < OrdersTotal(); i++) {
-       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
-           int size = ArraySize(current_tickets);
-           ArrayResize(current_tickets, size + 1);
-           current_tickets[size] = OrderTicket();
-       }
-   }
+   int openCount = 0;
+   for(int i = 0; i < OrdersTotal(); i++)
+     {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      int sz = ArraySize(current_tickets);
+      ArrayResize(current_tickets, sz + 1);
+      current_tickets[sz] = OrderTicket();
+     }
    ArrayResize(g_active_tickets, ArraySize(current_tickets));
-   for(int i=0; i<ArraySize(current_tickets); i++) {
-        g_active_tickets[i] = current_tickets[i];
-        if(OrderSelect(current_tickets[i], SELECT_BY_TICKET, MODE_TRADES)) {
-            int ot = OrderType();
-            if(ot <= OP_SELL) SendTradeDataToWebhook(current_tickets[i], "deal_open");
-            else SendTradeDataToWebhook(current_tickets[i], "pending_order");
-        }
-   }
+   for(int i = 0; i < ArraySize(current_tickets); i++)
+     {
+      g_active_tickets[i] = current_tickets[i];
+      if(!OrderSelect(current_tickets[i], SELECT_BY_TICKET, MODE_TRADES)) continue;
+      int ot = OrderType();
+      if(ot <= OP_SELL) { SendTradeDataToWebhook(current_tickets[i], "deal_open"); openCount++; }
+      else SendTradeDataToWebhook(current_tickets[i], "pending_order");
+     }
+   Print("InitialHistorySync: sent ", openCount, " open positions. DONE.");
   }
+
 
 void PollTradeEvents()
   {

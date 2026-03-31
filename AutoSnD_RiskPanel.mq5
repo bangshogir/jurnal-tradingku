@@ -433,62 +433,87 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
 void ResyncHistory()
   {
    if(InpResyncDays <= 0 || InpWebhookURL == "") return;
-   datetime to = TimeCurrent() + 86400; datetime from = TimeCurrent() - (InpResyncDays * 86400);
+   Print("ResyncHistory: starting sync for last ", InpResyncDays, " days...");
    
-   // 1. Collect all OUT deals (closed trades) and BALANCE deals safely
+   datetime to   = TimeCurrent() + 86400;
+   datetime from = TimeCurrent() - (InpResyncDays * 86400);
+   
+   // -----------------------------------------------------------------------
+   // STEP 1: Closed trades (DEAL_ENTRY_OUT) & Balance deals from history
+   // -----------------------------------------------------------------------
    ulong outDeals[];
    ulong balanceDeals[];
-   if(HistorySelect(from, to)) {
+   if(HistorySelect(from, to))
+     {
       int total = HistoryDealsTotal();
-      for(int i = 0; i < total; i++) {
+      for(int i = 0; i < total; i++)
+        {
          ulong t = HistoryDealGetTicket(i);
-         if(HistoryDealGetInteger(t, DEAL_ENTRY) == DEAL_ENTRY_OUT) {
-             int size = ArraySize(outDeals);
-             ArrayResize(outDeals, size + 1);
-             outDeals[size] = t;
-         } else if (HistoryDealGetInteger(t, DEAL_TYPE) == DEAL_TYPE_BALANCE) {
-             int size = ArraySize(balanceDeals);
-             ArrayResize(balanceDeals, size + 1);
-             balanceDeals[size] = t;
-         }
-      }
-   }
-   for(int i = 0; i < ArraySize(outDeals); i++) {
+         long  dealEntry = HistoryDealGetInteger(t, DEAL_ENTRY);
+         long  dealType  = HistoryDealGetInteger(t, DEAL_TYPE);
+         if(dealEntry == DEAL_ENTRY_OUT || dealEntry == DEAL_ENTRY_INOUT)
+           {
+            int sz = ArraySize(outDeals);
+            ArrayResize(outDeals, sz + 1);
+            outDeals[sz] = t;
+           }
+         else if(dealType == DEAL_TYPE_BALANCE)
+           {
+            int sz = ArraySize(balanceDeals);
+            ArrayResize(balanceDeals, sz + 1);
+            balanceDeals[sz] = t;
+           }
+        }
+     }
+   // Send closed trades
+   for(int i = 0; i < ArraySize(outDeals); i++)
       SendTradeDataToWebhook(outDeals[i], "deal_close");
-   }
-   for(int i = 0; i < ArraySize(balanceDeals); i++) {
+   // Send balance/deposit/withdrawal
+   for(int i = 0; i < ArraySize(balanceDeals); i++)
       SendTradeDataToWebhook(balanceDeals[i], "balance");
-   }
 
-   // 2. Collect all Open Positions safely
-   ulong openPositions[];
-   for(int i = 0; i < PositionsTotal(); i++) {
+   Print("ResyncHistory: sent ", ArraySize(outDeals), " closed trades, ", ArraySize(balanceDeals), " balance entries.");
+
+   // -----------------------------------------------------------------------
+   // STEP 2: Currently open positions (send as deal_open)
+   // -----------------------------------------------------------------------
+   int openCount = 0;
+   for(int i = 0; i < PositionsTotal(); i++)
+     {
+      ulong posTicket = PositionGetTicket(i); // Also selects the position
+      if(posTicket == 0) continue;
       long posID = PositionGetInteger(POSITION_IDENTIFIER);
-      int size = ArraySize(openPositions);
-      ArrayResize(openPositions, size + 1);
-      openPositions[size] = (ulong)posID;
-   }
-   for(int i = 0; i < ArraySize(openPositions); i++) {
-      long posID = (long)openPositions[i];
-      if(HistorySelectByPosition(posID)) {
-         for(int d = 0; d < HistoryDealsTotal(); d++) {
-            ulong t = HistoryDealGetTicket(d);
-            if(HistoryDealGetInteger(t, DEAL_ENTRY) == DEAL_ENTRY_IN) { SendTradeDataToWebhook(t, "deal_open"); break; }
-         }
-      }
-   }
-   
-   // 3. Collect all Pending Orders safely
-   ulong activeOrders[];
-   for(int i = 0; i < OrdersTotal(); i++) {
-      int size = ArraySize(activeOrders);
-      ArrayResize(activeOrders, size + 1);
-      activeOrders[size] = OrderGetTicket(i);
-   }
-   for(int i = 0; i < ArraySize(activeOrders); i++) {
-      SendTradeDataToWebhook(activeOrders[i], "pending_order");
-   }
+      // Find the IN deal for this position
+      if(HistorySelectByPosition(posID))
+        {
+         for(int d = 0; d < HistoryDealsTotal(); d++)
+           {
+            ulong dt = HistoryDealGetTicket(d);
+            if(HistoryDealGetInteger(dt, DEAL_ENTRY) == DEAL_ENTRY_IN)
+              {
+               SendTradeDataToWebhook(dt, "deal_open");
+               openCount++;
+               break;
+              }
+           }
+        }
+     }
+   Print("ResyncHistory: sent ", openCount, " open positions.");
+
+   // -----------------------------------------------------------------------
+   // STEP 3: Pending orders
+   // -----------------------------------------------------------------------
+   int pendingCount = 0;
+   for(int i = 0; i < OrdersTotal(); i++)
+     {
+      ulong ot = OrderGetTicket(i);
+      if(ot == 0) continue;
+      SendTradeDataToWebhook(ot, "pending_order");
+      pendingCount++;
+     }
+   Print("ResyncHistory: sent ", pendingCount, " pending orders. DONE.");
   }
+
 
 //=====================================================================
 // [6] AUTO SND TRADING ENGINE - SnD_Zone Logic + Fibo Filter
