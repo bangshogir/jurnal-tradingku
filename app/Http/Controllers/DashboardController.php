@@ -123,6 +123,7 @@ class DashboardController extends Controller
 
         $runningBalance = $initialBalance;
         $peakBalance    = $runningBalance;
+        $lowestBalance  = $runningBalance;
         $maxDrawdownAmt = 0;
         $allTimeHigh    = max(0, $runningBalance); // At least initial
 
@@ -131,11 +132,15 @@ class DashboardController extends Controller
             if ($runningBalance > $peakBalance) {
                 $peakBalance = $runningBalance;
             }
+            if ($runningBalance < $lowestBalance) {
+                $lowestBalance = $runningBalance;
+            }
             $drawdownAmt = $peakBalance - $runningBalance;
             $maxDrawdownAmt = max($maxDrawdownAmt, $drawdownAmt);
             $allTimeHigh = max($allTimeHigh, $runningBalance);
         }
         $maxDrawdown = round($maxDrawdownAmt, 2);
+        $lowestBalance = round($lowestBalance, 2);
         $allTimeHigh = round($allTimeHigh, 2);
         
         // Today calculations
@@ -184,6 +189,7 @@ class DashboardController extends Controller
             'losingTrades',
             'profitPct',
             'maxDrawdown',
+            'lowestBalance',
             'allTimeHigh',
             'todayTradesCount',
             'todayProfit',
