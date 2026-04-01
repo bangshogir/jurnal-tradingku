@@ -81,7 +81,7 @@
                 ],
                 [
                     'label' => 'Win / Loss',
-                    'value' => ($winningTrades ?? 0) . ' / ' . ($losingTrades ?? 0),
+                    'value' => '<span class="text-emerald-500">' . ($winningTrades ?? 0) . '</span> <span class="text-slate-300 mx-1">/</span> <span class="text-red-500">' . ($losingTrades ?? 0) . '</span>',
                     'change' => '',
                     'changeColor' => 'text-slate-500',
                     'subtext' => 'trades count',
@@ -139,7 +139,7 @@
                 </div>
                 <div class="mt-4">
                     <p class="text-2xl sm:text-3xl font-bold {{ $card['valColor'] }} tracking-tight shadow-sm-text">
-                        {{ $card['value'] }}
+                        {!! $card['value'] !!}
                     </p>
                     <p class="text-[11px] font-medium mt-1 flex items-center gap-1.5 min-h-[16px]">
                         @if ($card['change'])
