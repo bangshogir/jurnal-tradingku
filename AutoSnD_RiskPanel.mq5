@@ -427,7 +427,15 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    string headers = "Content-Type: application/json\r\nX-Webhook-Token: " + InpWebhookToken + "\r\n";
    StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
    int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
-   WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, headers);
+   string resHeaders;
+   int res = WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
+   if(res == -1) {
+      int err = GetLastError();
+      if(err == 4014) Print("WEBHOOK BLOCKED! Please go to Tools -> Options -> Expert Advisors, tick 'Allow WebRequest' and add: ", InpWebhookURL);
+      else Print("WEBHOOK ERROR! Ticket: ", ticket, " Event: ", eventType, " Code: ", err);
+   } else if(res != 200 && res != 201) {
+      Print("WEBHOOK SERVER ERROR! HTTP ", res, " | Ticket: ", ticket, " Event: ", eventType);
+   }
   }
 
 void ResyncHistory()
@@ -882,7 +890,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
             SendTradeDataToWebhook(trans.deal, "balance");
          } else {
             long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
-            if(entry == DEAL_ENTRY_OUT) SendTradeDataToWebhook(trans.deal, "deal_close");
+            if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT) SendTradeDataToWebhook(trans.deal, "deal_close");
             else if(entry == DEAL_ENTRY_IN) SendTradeDataToWebhook(trans.deal, "deal_open");
          }
       }

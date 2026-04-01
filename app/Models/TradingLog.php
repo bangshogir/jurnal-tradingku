@@ -22,7 +22,6 @@ class TradingLog extends Model
         'profit_loss',
         'open_time',
         'close_time',
-        'profit_loss',
         'swap',
         'commission',
         'magic_number',

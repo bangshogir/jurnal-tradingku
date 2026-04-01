@@ -159,7 +159,11 @@ class DashboardController extends Controller
         for ($i = 29; $i >= 0; $i--) {
             $day = \Carbon\Carbon::today()->subDays($i);
             $dayProfit = $allTrades->filter(function ($t) use ($day) {
-                $date = $t->close_time ?? $t->open_time ?? $t->created_at;
+                $date = $t->close_time ?? $t->open_time;
+                if (!$date && in_array($t->type, ['buy_closed', 'sell_closed', 'other_closed'])) {
+                    return false; // Skip closed trades with missing dates (same as todayTradesList)
+                }
+                $date = $date ?? $t->created_at;
                 return $date && \Carbon\Carbon::parse($date)->isSameDay($day);
             })->sum('profit_loss');
             $chartData[] = [

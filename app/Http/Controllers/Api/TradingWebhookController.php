@@ -39,7 +39,7 @@ class TradingWebhookController extends Controller
         // Validate incoming data
         $validated = $request->validate([
             'ticket_id'    => 'required|string',
-            'symbol'       => 'required|string',
+            'symbol'       => 'nullable|string',
             'type'         => 'required|string',
             'entry_price'  => 'nullable|numeric',
             'close_price'  => 'nullable|numeric',
