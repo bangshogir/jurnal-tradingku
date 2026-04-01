@@ -104,13 +104,6 @@ class DashboardController extends Controller
         $losingTrades  = $allTrades->where('profit_loss', '<', 0)->count();
         $winRate       = $totalTrades > 0 ? round(($winningTrades / $totalTrades) * 100, 2) : 0;
         
-        // Profit percentage (Profit Factor: Gross Profit / Gross Loss)
-        $grossProfit = $allTrades->where('profit_loss', '>', 0)->sum('profit_loss');
-        $grossLoss   = abs($allTrades->where('profit_loss', '<', 0)->sum('profit_loss'));
-        $profitPct   = ($grossProfit + $grossLoss) > 0 
-            ? round(($grossProfit / ($grossProfit + $grossLoss)) * 100, 2) 
-            : 0;
-
         // Calculate Max Drawdown & All Time High based on REAL balance history
         $allFinancialEvents = TradingLog::where('user_id', Auth::id())
             ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed', 'deposit', 'withdrawal'])
@@ -120,6 +113,13 @@ class DashboardController extends Controller
         $totalHistoricalChange = $allFinancialEvents->sum('profit_loss');
         $currentBalance = Auth::user()->balance ?? 0;
         $initialBalance = $currentBalance - $totalHistoricalChange;
+
+        // Calculate total net deposits (sum of deposits & withdrawals)
+        $netDeposits = $allFinancialEvents->whereIn('type', ['deposit', 'withdrawal'])->sum('profit_loss');
+        $totalCapital = $initialBalance + $netDeposits;
+
+        // Return on Investment Percentage (based on actual capital)
+        $profitPct = $totalCapital > 0 ? round(($totalProfit / $totalCapital) * 100, 2) : 0;
 
         $runningBalance = $initialBalance;
         $peakBalance    = $runningBalance;
@@ -195,6 +195,7 @@ class DashboardController extends Controller
             'todayProfit',
             'currentBalance',
             'initialBalance',
+            'totalCapital',
             'chartData',
             'filter',
             'dateFilter'

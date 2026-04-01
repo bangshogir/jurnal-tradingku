@@ -74,7 +74,7 @@
                     'value' => '$' . number_format($currentBalance, 2),
                     'change' => '',
                     'changeColor' => 'text-emerald-500',
-                    'subtext' => 'Modal Awal: $' . number_format($initialBalance ?? 0, 2),
+                    'subtext' => 'Modal: $' . number_format($totalCapital ?? 0, 2),
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>',
                     'valColor' => 'text-slate-900',
@@ -90,11 +90,11 @@
                     'valColor' => 'text-slate-900',
                 ],
                 [
-                    'label' => 'Profit Factor',
-                    'value' => ($profitPct ?? 0) . '%',
+                    'label' => 'Return on Investment',
+                    'value' => ($profitPct >= 0 ? '+' : '') . ($profitPct ?? 0) . '%',
                     'change' => '',
                     'changeColor' => 'text-emerald-500',
-                    'subtext' => 'gross pnl',
+                    'subtext' => 'from total capital',
                     'icon' =>
                         '<svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>',
                     'valColor' => 'text-slate-900',
