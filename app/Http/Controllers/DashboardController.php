@@ -212,9 +212,21 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        // 1. Daily Profit/Loss for current month
-        $startOfMonth = now()->startOfMonth();
-        $endOfMonth = now()->endOfMonth();
+        // 1. Daily Profit/Loss for requested month (default: current)
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        try {
+            $baseDate = \Carbon\Carbon::createFromDate($year, $month, 1);
+        } catch (\Exception $e) {
+            $baseDate = now();
+        }
+
+        $startOfMonth = $baseDate->copy()->startOfMonth();
+        $endOfMonth = $baseDate->copy()->endOfMonth();
+
+        $prevMonth = $baseDate->copy()->subMonth();
+        $nextMonth = $baseDate->copy()->addMonth();
 
         $dailyTrades = TradingLog::where('user_id', $userId)
             ->whereIn('type', ['buy_closed', 'sell_closed'])
@@ -273,7 +285,7 @@ class DashboardController extends Controller
         $totalDeposit = TradingLog::where('user_id', $userId)->where('type', 'deposit')->sum('profit_loss');
         $totalWithdrawal = TradingLog::where('user_id', $userId)->where('type', 'withdrawal')->sum('profit_loss');
 
-        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'sort', 'totalDeposit', 'totalWithdrawal'));
+        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'prevMonth', 'nextMonth', 'sort', 'totalDeposit', 'totalWithdrawal'));
     }
 
     public function pendingOrders()

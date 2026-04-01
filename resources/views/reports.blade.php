@@ -33,7 +33,20 @@
 
         {{-- CALENDAR HEATMAP --}}
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 overflow-hidden">
-            <h3 class="text-lg font-bold text-slate-900 tracking-tight mb-6">Daily Profit/Loss ({{ $startOfMonth->format('F Y') }})</h3>
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight">Daily Profit/Loss</h3>
+                <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1 shadow-sm">
+                    <a href="{{ route('dashboard.reports', ['month' => $prevMonth->month, 'year' => $prevMonth->year, 'sort' => $sort]) }}" 
+                       class="p-1.5 rounded hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-700 transition-all" title="Previous Month">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </a>
+                    <span class="text-sm font-bold text-slate-700 min-w-[110px] text-center select-none">{{ $startOfMonth->format('F Y') }}</span>
+                    <a href="{{ route('dashboard.reports', ['month' => $nextMonth->month, 'year' => $nextMonth->year, 'sort' => $sort]) }}" 
+                       class="p-1.5 rounded hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-700 transition-all" title="Next Month">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                </div>
+            </div>
             
             @php
                 $daysInMonth = $startOfMonth->daysInMonth;
