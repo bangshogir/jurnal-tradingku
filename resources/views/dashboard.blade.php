@@ -41,13 +41,13 @@
             $cards = [
                 [
                     'label' => 'Total Profit/Loss',
-                    'value' => ($totalProfit >= 0 ? '$' : '-$') . number_format(abs($totalProfit), 2),
+                    'value' => ($totalProfit > 0 ? '+$' : ($totalProfit < 0 ? '-$' : '$')) . number_format(abs($totalProfit), 2),
                     'change' => ($todayProfit >= 0 ? '+' : '') . '$' . number_format($todayProfit, 2),
-                    'changeColor' => $todayProfit >= 0 ? 'text-emerald-500' : 'text-red-500',
+                    'changeColor' => $todayProfit > 0 ? 'text-emerald-500' : ($todayProfit < 0 ? 'text-red-500' : 'text-slate-500'),
                     'subtext' => 'profit today',
                     'icon' =>
                         '<svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
-                    'valColor' => $totalProfit >= 0 ? 'text-slate-900' : 'text-red-500',
+                    'valColor' => $totalProfit > 0 ? 'text-emerald-600' : ($totalProfit < 0 ? 'text-red-500' : 'text-slate-900'),
                 ],
                 [
                     'label' => 'Win Rate',
@@ -73,11 +73,11 @@
                     'label' => 'Current Balance',
                     'value' => '$' . number_format($currentBalance, 2),
                     'change' => '',
-                    'changeColor' => 'text-emerald-500',
+                    'changeColor' => '',
                     'subtext' => 'Modal: $' . number_format($totalCapital ?? 0, 2),
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>',
-                    'valColor' => 'text-slate-900',
+                    'valColor' => ($currentBalance - $totalCapital) > 0 ? 'text-emerald-600' : (($currentBalance - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
                 ],
                 [
                     'label' => 'Win / Loss',
@@ -91,33 +91,33 @@
                 ],
                 [
                     'label' => 'Return on Investment',
-                    'value' => ($profitPct >= 0 ? '+' : '') . ($profitPct ?? 0) . '%',
+                    'value' => ($profitPct > 0 ? '+' : '') . ($profitPct ?? 0) . '%',
                     'change' => '',
-                    'changeColor' => 'text-emerald-500',
+                    'changeColor' => '',
                     'subtext' => 'from total capital',
                     'icon' =>
                         '<svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>',
-                    'valColor' => 'text-slate-900',
+                    'valColor' => $profitPct > 0 ? 'text-emerald-600' : ($profitPct < 0 ? 'text-red-500' : 'text-slate-900'),
                 ],
                 [
                     'label' => 'Lowest Balance',
                     'value' => '$' . number_format($lowestBalance ?? 0, 2),
                     'change' => '',
-                    'changeColor' => 'text-slate-500',
+                    'changeColor' => '',
                     'subtext' => 'min balance reached',
                     'icon' =>
                         '<svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>',
-                    'valColor' => 'text-slate-900',
+                    'valColor' => ($lowestBalance - $totalCapital) > 0 ? 'text-emerald-600' : (($lowestBalance - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
                 ],
                 [
                     'label' => 'All Time High',
-                    'value' => '+$' . number_format($allTimeHigh ?? 0, 2),
+                    'value' => '$' . number_format($allTimeHigh ?? 0, 2),
                     'change' => '',
-                    'changeColor' => 'text-emerald-500',
-                    'subtext' => 'peak profit',
+                    'changeColor' => '',
+                    'subtext' => 'peak balance',
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>',
-                    'valColor' => 'text-emerald-600',
+                    'valColor' => ($allTimeHigh - $totalCapital) > 0 ? 'text-emerald-600' : (($allTimeHigh - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
                 ],
             ];
         @endphp
