@@ -77,7 +77,7 @@
                     'subtext' => 'Modal: $' . number_format($totalCapital ?? 0, 2),
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>',
-                    'valColor' => ($currentBalance - $totalCapital) > 0 ? 'text-emerald-600' : (($currentBalance - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
+                    'valColor' => (abs(round($currentBalance, 2) - round($totalCapital, 2)) < 0.005) ? 'text-slate-900' : (round($currentBalance, 2) > round($totalCapital, 2) ? 'text-emerald-600' : 'text-red-500'),
                 ],
                 [
                     'label' => 'Win / Loss',
@@ -97,7 +97,7 @@
                     'subtext' => 'from total capital',
                     'icon' =>
                         '<svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>',
-                    'valColor' => $profitPct > 0 ? 'text-emerald-600' : ($profitPct < 0 ? 'text-red-500' : 'text-slate-900'),
+                    'valColor' => (abs(round($profitPct, 2)) < 0.005) ? 'text-slate-900' : (round($profitPct, 2) > 0 ? 'text-emerald-600' : 'text-red-500'),
                 ],
                 [
                     'label' => 'Lowest Balance',
@@ -107,7 +107,7 @@
                     'subtext' => 'min balance reached',
                     'icon' =>
                         '<svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>',
-                    'valColor' => ($lowestBalance - $totalCapital) > 0 ? 'text-emerald-600' : (($lowestBalance - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
+                    'valColor' => (abs(round($lowestBalance, 2) - round($totalCapital, 2)) < 0.005) ? 'text-slate-900' : (round($lowestBalance, 2) > round($totalCapital, 2) ? 'text-emerald-600' : 'text-red-500'),
                 ],
                 [
                     'label' => 'All Time High',
@@ -117,7 +117,7 @@
                     'subtext' => 'peak balance',
                     'icon' =>
                         '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>',
-                    'valColor' => ($allTimeHigh - $totalCapital) > 0 ? 'text-emerald-600' : (($allTimeHigh - $totalCapital) < 0 ? 'text-red-500' : 'text-slate-900'),
+                    'valColor' => (abs(round($allTimeHigh, 2) - round($totalCapital, 2)) < 0.005) ? 'text-slate-900' : (round($allTimeHigh, 2) > round($totalCapital, 2) ? 'text-emerald-600' : 'text-red-500'),
                 ],
             ];
         @endphp
