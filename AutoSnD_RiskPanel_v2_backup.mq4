@@ -67,26 +67,19 @@ input string  _sec2_ = "=== Auto Close Friday ===";
 input bool    InpEnableAutoCloseFriday = false; // Enable Auto Close Friday
 input int     InpAutoCloseMinutesBefore = 15;   // Minutes before market close
 
-input string  _sec3_ = "=== Auto SnD & SMC Rules ===";
+input string  _sec3_ = "=== Auto SnD Trading Logic ===";
 input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
 input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
 input int     InpOriginLookback = 50;    // Traceback max candle base
 input double  InpBufferPoints   = 20.0;  // Jarak Buffer SL (Points)
 input int     InpHistoryBars    = 600;   // Jumlah Bar Histori Discan
-
-input string  _sec4_ = "=== Visual Settings ===";
 input bool    InpShowBOS        = true;  // Tampilkan Garis BOS di Chart
-input color   InpDemandColor    = C'0,160,0';   // Warna Zona Demand Base
-input color   InpSupplyColor    = C'190,0,0';   // Warna Zona Supply Base
-input color   InpFvgDemandColor = C'0,100,200'; // Warna Zona Demand FVG
-input color   InpFvgSupplyColor = C'200,100,0'; // Warna Zona Supply FVG
-input bool    InpHighlightFvgCandle = true;     // Highlight Warna Candle FVG
-input color   InpCandleFvgBullColor = C'100,200,100'; // Warna FVG Bullish Target
-input color   InpCandleFvgBearColor = C'200,100,100'; // Warna FVG Bearish Target
+input color   InpDemandColor    = C'0,160,0';   // Warna Zona Demand
+input color   InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
 input bool    InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
 input color   InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
-input color   InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS/CHoCH
-input color   InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS/CHoCH
+input color   InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
+input color   InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone)
@@ -102,8 +95,6 @@ struct ZoneData
    double   btm;
    datetime start_time;
    bool     active;
-   bool     is_base;
-   bool     has_fvg;
   };
 
 #define MAX_ZONES    300
@@ -120,13 +111,6 @@ double   g_old_last_ph  = 0;
 double   g_old_last_pl  = 0;
 datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
-
-double   g_valid_ph     = 0;
-datetime g_valid_ph_t   = 0;
-double   g_valid_pl     = 0;
-datetime g_valid_pl_t   = 0;
-int      g_smc_trend    = 0; 
-
 
 datetime g_last_processed_bar = 0;
 
@@ -553,31 +537,22 @@ void PollTradeEvents()
 //=====================================================================
 
 // ---- Zone Drawing ----
-void DrawZone(bool is_demand, double top, double btm, datetime start_time, bool is_base, bool has_fvg)
+void DrawZone(bool is_demand, double top, double btm, datetime start_time)
   {
    if(g_zone_count >= MAX_ZONES) return;
-   
-   color col_use = clrNONE;
-   if(is_base) col_use = is_demand ? InpDemandColor : InpSupplyColor;
-   else col_use = is_demand ? InpFvgDemandColor : InpFvgSupplyColor;
-   
+   color col_use = is_demand ? InpDemandColor : InpSupplyColor;
    string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
    datetime future_time = TimeCurrent() + 259200000;
    if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,future_time,btm))
      { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,Digits)+" Btm:"+DoubleToString(btm,Digits)); }
-   
-   string lbl_txt = is_demand ? " Origin Demand" : " Origin Supply";
-   if(!is_base) lbl_txt = is_demand ? " FVG Demand" : " FVG Supply";
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-     { ObjectSetString(0,lname,OBJPROP_TEXT,lbl_txt); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
-   
+     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
    string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
    if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
    if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
-   
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
-   g_zones[g_zone_count].active=true; g_zones[g_zone_count].is_base=is_base; g_zones[g_zone_count].has_fvg=has_fvg;
+   g_zones[g_zone_count].active=true;
    g_zone_count++;
   }
 
@@ -644,50 +619,6 @@ double GetPivotLow(int lb, int shift)
 int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)<iOpen(Symbol(),Period(),i)) return i; return -1; }
 int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)>iOpen(Symbol(),Period(),i)) return i; return -1; }
 
-void HighlightFVG(int candle_idx, bool is_bullish) {
-   if(!InpHighlightFvgCandle) return;
-   color col = is_bullish ? InpCandleFvgBullColor : InpCandleFvgBearColor;
-   string name = "FVG_C_"+NextID();
-   datetime t1 = iTime(Symbol(),Period(),candle_idx);
-   double p1 = iHigh(Symbol(),Period(),candle_idx);
-   double p2 = iLow(Symbol(),Period(),candle_idx);
-   if(ObjectCreate(0, name, OBJ_TREND, 0, t1, p1, t1, p2)) {
-       ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-       ObjectSetInteger(0, name, OBJPROP_WIDTH, 5);
-       ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
-       ObjectSetInteger(0, name, OBJPROP_BACK, true);
-       ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   }
-}
-
-int FindDecisionalDemand(int shift) {
-   for(int i=shift; i<=shift+15; i++) {
-        bool fvg = iLow(Symbol(),Period(),i) > iHigh(Symbol(),Period(),i+2);
-        if(fvg) {
-             int base = i+2; 
-             if(iClose(Symbol(),Period(),base) < iOpen(Symbol(),Period(),base)) {
-                 HighlightFVG(i+1, true);
-                 return base;
-             }
-        }
-   }
-   return -1;
-}
-
-int FindDecisionalSupply(int shift) {
-   for(int i=shift; i<=shift+15; i++) {
-        bool fvg = iHigh(Symbol(),Period(),i) < iLow(Symbol(),Period(),i+2);
-        if(fvg) {
-             int base = i+2;
-             if(iClose(Symbol(),Period(),base) > iOpen(Symbol(),Period(),base)) {
-                 HighlightFVG(i+1, false);
-                 return base;
-             }
-        }
-   }
-   return -1;
-}
-
 void CheckMitigation(int shift)
   {
    double l=iLow(Symbol(),Period(),shift), h=iHigh(Symbol(),Period(),shift);
@@ -701,7 +632,7 @@ void CheckMitigation(int shift)
   }
 
 // ---- Execution ----
-void ExecuteAutoTradeEx(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
+void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
   {
    if(g_is_scanning_history) return;
    if(!InpEnableAutoSnD) return;
@@ -722,131 +653,157 @@ void ExecuteAutoTradeEx(bool isDemand, double zoneTop, double zoneBtm, datetime 
    double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
    tpPrice = NormalizeDouble(tpPrice, digs);
    string comm = "SND_AUTO";
-   double backupSL = stopLoss; 
+   double backupSL = stopLoss; // By default, Hard SL is the calculated Stop Loss
+   
    if(ExtPanel.m_cl_active)
      {
       comm = "SND_CL_" + DoubleToString(stopLoss, digs);
+      // Soft CL is active. Set Hard SL further away (2x distance) as a safety net.
       backupSL = isDemand ? NormalizeDouble(entryPrice - diff * 2.0, digs) : NormalizeDouble(entryPrice + diff * 2.0, digs);
      }
+     
    bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm)
                           : ExtTrade.SellLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm);
-   if(result) { MarkZoneTraded(zoneTime); Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice); }
+   if(result)
+     {
+      MarkZoneTraded(zoneTime);
+      Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
+     }
   }
 
+// ---- Draw only Fibo 38.2 and 61.8 levels (only when a valid zone is found) ----
 void DrawFiboLines(double f382, double f618, datetime from_time)
   {
    string uid = NextID();
    string name382 = "SnD_F382_" + uid;
    string name618 = "SnD_F618_" + uid;
    color fibo_col = clrMagenta;
+   
    int bar_from = iBarShift(Symbol(), Period(), from_time);
    int bar_end  = MathMax(bar_from - 20, 0);
    datetime end_time = iTime(Symbol(), Period(), bar_end);
+   
    if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, end_time, f382))
      {
-      ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col); ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, false); ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false); ObjectSetInteger(0, name382, OBJPROP_BACK, true);
+      ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col);
+      ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, name382, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, false);
+      ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, name382, OBJPROP_BACK, true);
+      ObjectSetString(0, name382, OBJPROP_TOOLTIP, "Fibo 38.2%: " + DoubleToString(f382, Digits));
+      string lbl382 = "SnD_FL382_" + uid;
+      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, end_time, f382))
+        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2"); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
      }
+   
    if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, end_time, f618))
      {
-      ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col); ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, false); ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false); ObjectSetInteger(0, name618, OBJPROP_BACK, true);
+      ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col);
+      ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, name618, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, false);
+      ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, name618, OBJPROP_BACK, true);
+      ObjectSetString(0, name618, OBJPROP_TOOLTIP, "Fibo 61.8%: " + DoubleToString(f618, Digits));
+      string lbl618 = "SnD_FL618_" + uid;
+      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, end_time, f618))
+        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8"); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
      }
   }
 
+// ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
 bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
   {
    if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
    if(!g_zones[zone_idx].active) return false;
    if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
+
    double dist    = fibo_high - fibo_low;
-   double f_upper = fibo_high - dist * 0.382;
-   double f_lower = fibo_high - dist * 0.618;
+   double f_upper = fibo_high - dist * 0.382; // 38.2 level
+   double f_lower = fibo_high - dist * 0.618; // 61.8 level
+
    bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
    if(!overlaps) return false;
+
    DrawFiboLines(f_upper, f_lower, from_time);
-   ExecuteAutoTradeEx(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
+   ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
    return true;
   }
 
+// ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
 void ProcessBar(int shift)
   {
    g_old_last_ph=g_last_ph; g_old_last_pl=g_last_pl;
-   double ph=GetPivotHigh(InpPivotLB,shift);
-   if(ph>0) { g_last_ph=ph; g_last_ph_time=iTime(Symbol(),Period(),shift+InpPivotLB); }
-   double pl=GetPivotLow(InpPivotLB,shift);
-   if(pl>0) { g_last_pl=pl; g_last_pl_time=iTime(Symbol(),Period(),shift+InpPivotLB); }
 
+   double ph=GetPivotHigh(InpPivotLB,shift);
+   if(ph>0)
+     {
+      datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);
+      g_last_ph=ph; g_last_ph_time=t;
+     }
+
+   double pl=GetPivotLow(InpPivotLB,shift);
+   if(pl>0)
+     {
+      datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);
+      g_last_pl=pl; g_last_pl_time=t;
+     }
+
+   bool bull_fvg=iLow(Symbol(),Period(),shift)>iHigh(Symbol(),Period(),shift+2);
+   bool bear_fvg=iHigh(Symbol(),Period(),shift)<iLow(Symbol(),Period(),shift+2);
    double cls=iClose(Symbol(),Period(),shift);
 
-   // SMC Inducement Logic:
-   // Confirm Swing if price sweeps recent pullback (simplified IDM)
-   if(g_last_ph > 0 && g_last_pl > 0) {
-       if(cls < g_last_pl && g_last_ph_time > g_valid_ph_t) { g_valid_ph = g_last_ph; g_valid_ph_t = g_last_ph_time; } // Swept IDM Low -> Valid High
-       if(cls > g_last_ph && g_last_pl_time > g_valid_pl_t) { g_valid_pl = g_last_pl; g_valid_pl_t = g_last_pl_time; } // Swept IDM High -> Valid Low
-   }
-
-   bool bull_bos = (g_valid_ph > 0 && cls > g_valid_ph && g_valid_ph_t != g_marked_ph_time);
-   bool bear_bos = (g_valid_pl > 0 && cls < g_valid_pl && g_valid_pl_t != g_marked_pl_time);
+   bool bull_bos=bull_fvg&&g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
+   bool bear_bos=bear_fvg&&g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
 
    if(bull_bos)
      {
-      g_marked_ph_time=g_valid_ph_t;
-      if(g_smc_trend == -1) DrawBOS(true, g_valid_ph, g_valid_ph_t, iTime(Symbol(),Period(),shift)); // CHoCH text ideally, but BOS function handles line
-      else DrawBOS(true, g_valid_ph, g_valid_ph_t, iTime(Symbol(),Period(),shift));
-      g_smc_trend = 1;
+      g_marked_ph_time=g_last_ph_time;
+      DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
       
-      g_fibo_bull_pending = false; g_pending_bull_zone_idx = -1;
+      g_fibo_bull_pending = false;
+      g_pending_bull_zone_idx = -1;
       
-      // METHOD 1: Extreme Base + Fibo
       int base=FindDemandBase(shift);
-      if(base!=-1) {
-         DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base), true, false);
-         g_pending_bull_zone_idx = g_zone_count - 1; g_fibo_origin_bullish = g_valid_pl; g_fibo_origin_bull_time = g_valid_pl_t;
+      if(base!=-1)
+        {
+         DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+         g_pending_bull_zone_idx = g_zone_count - 1; 
+         g_fibo_origin_bullish  = g_last_pl;
+         g_fibo_origin_bull_time = g_last_pl_time;
          g_fibo_bull_pending = true;
-      }
-      
-      // METHOD 2: Decisional FVG SnD (Not at Base, but has Imbalance)
-      int dec_base=FindDecisionalDemand(shift);
-      if(dec_base!=-1 && dec_base != base) {
-         DrawZone(true,iHigh(Symbol(),Period(),dec_base),iLow(Symbol(),Period(),dec_base),iTime(Symbol(),Period(),dec_base), false, true);
-         ExecuteAutoTradeEx(true, iHigh(Symbol(),Period(),dec_base), iLow(Symbol(),Period(),dec_base), iTime(Symbol(),Period(),dec_base));
-      }
+        }
      }
 
    if(bear_bos)
      {
-      g_marked_pl_time=g_valid_pl_t;
-      DrawBOS(false, g_valid_pl, g_valid_pl_t, iTime(Symbol(),Period(),shift));
-      g_smc_trend = -1;
+      g_marked_pl_time=g_last_pl_time;
+      DrawBOS(false,g_last_pl,g_last_pl_time,iTime(Symbol(),Period(),shift));
       
-      g_fibo_bear_pending = false; g_pending_bear_zone_idx = -1;
+      g_fibo_bear_pending = false;
+      g_pending_bear_zone_idx = -1;
       
-      // METHOD 1: Extreme Base + Fibo
       int base=FindSupplyBase(shift);
-      if(base!=-1) {
-         DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base), true, false);
-         g_pending_bear_zone_idx = g_zone_count - 1; g_fibo_origin_bearish = g_valid_ph; g_fibo_origin_bear_time = g_valid_ph_t;
+      if(base!=-1)
+        {
+         DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+         g_pending_bear_zone_idx = g_zone_count - 1; 
+         g_fibo_origin_bearish  = g_last_ph;
+         g_fibo_origin_bear_time = g_last_ph_time;
          g_fibo_bear_pending = true;
-      }
-      
-      // METHOD 2: Decisional FVG SnD (Not at Base, but has Imbalance)
-      int dec_base=FindDecisionalSupply(shift);
-      if(dec_base!=-1 && dec_base != base) {
-         DrawZone(false,iHigh(Symbol(),Period(),dec_base),iLow(Symbol(),Period(),dec_base),iTime(Symbol(),Period(),dec_base), false, true);
-         ExecuteAutoTradeEx(false, iHigh(Symbol(),Period(),dec_base), iLow(Symbol(),Period(),dec_base), iTime(Symbol(),Period(),dec_base));
-      }
+        }
      }
 
-   if(g_fibo_bull_pending && g_smc_trend == 1 && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
+   if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
      {
-      if(CheckFiboAndTrade(g_fibo_origin_bullish, ph, g_last_ph_time, g_pending_bull_zone_idx))
+      if(CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx))
         { g_fibo_bull_pending = false; g_pending_bull_zone_idx = -1; }
      }
 
-   if(g_fibo_bear_pending && g_smc_trend == -1 && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
+   if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
      {
-      if(CheckFiboAndTrade(pl, g_fibo_origin_bearish, g_last_pl_time, g_pending_bear_zone_idx))
+      if(CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx))
         { g_fibo_bear_pending = false; g_pending_bear_zone_idx = -1; }
      }
 

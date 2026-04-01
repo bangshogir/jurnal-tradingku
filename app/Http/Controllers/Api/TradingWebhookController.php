@@ -118,7 +118,7 @@ class TradingWebhookController extends Controller
             ]);
 
             // Mandatory fields
-            $log->symbol = $validated['symbol'];
+            $log->symbol = $validated['symbol'] ?? '-';
             $log->type = $validated['type'];
 
             // Optional fields (Only update if they were provided in the payload to prevent wiping out data)
