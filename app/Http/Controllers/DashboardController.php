@@ -110,25 +110,44 @@ class DashboardController extends Controller
             ->orderByRaw('COALESCE(close_time, open_time, created_at) ASC')
             ->get();
 
-        $totalHistoricalChange = $allFinancialEvents->sum('profit_loss');
+        $totalHistoricalChange = 0;
+        foreach ($allFinancialEvents as $t) {
+            $totalHistoricalChange += ($t->profit_loss + $t->swap + $t->commission);
+        }
         $currentBalance = Auth::user()->balance ?? 0;
         $initialBalance = $currentBalance - $totalHistoricalChange;
 
         // Calculate total net deposits (sum of deposits & withdrawals)
-        $netDeposits = $allFinancialEvents->whereIn('type', ['deposit', 'withdrawal'])->sum('profit_loss');
+        $netDeposits = 0;
+        foreach ($allFinancialEvents as $t) {
+            if (in_array($t->type, ['deposit', 'withdrawal'])) {
+                $netDeposits += ($t->profit_loss + $t->swap + $t->commission);
+            }
+        }
         $totalCapital = $initialBalance + $netDeposits;
 
         // Return on Investment Percentage (based on actual capital)
-        $profitPct = $totalCapital > 0 ? round(($totalProfit / $totalCapital) * 100, 2) : 0;
+        // Adjust totalProfit to include swap and commission for accurate ROI
+        $netProfit = $totalProfit + $allTradesQuery->sum('swap') + $allTradesQuery->sum('commission');
+        $profitPct = $totalCapital > 0 ? round(($netProfit / $totalCapital) * 100, 2) : 0;
 
         $runningBalance = $initialBalance;
         $peakBalance    = $runningBalance;
-        $lowestBalance  = $runningBalance;
+        
+        // Don't make lowestBalance the pre-deposit 0 state if possible
+        $lowestBalance  = null; 
         $maxDrawdownAmt = 0;
         $allTimeHigh    = max(0, $runningBalance); // At least initial
 
         foreach ($allFinancialEvents as $t) {
-            $runningBalance += $t->profit_loss;
+            // Apply net change for this event
+            $runningBalance += ($t->profit_loss + $t->swap + $t->commission);
+            
+            if ($lowestBalance === null) {
+                // Initialize lowest balance after the first event (usually a deposit)
+                $lowestBalance = $runningBalance;
+            }
+
             if ($runningBalance > $peakBalance) {
                 $peakBalance = $runningBalance;
             }
@@ -139,6 +158,9 @@ class DashboardController extends Controller
             $maxDrawdownAmt = max($maxDrawdownAmt, $drawdownAmt);
             $allTimeHigh = max($allTimeHigh, $runningBalance);
         }
+        
+        if ($lowestBalance === null) $lowestBalance = $initialBalance;
+        
         $maxDrawdown = round($maxDrawdownAmt, 2);
         $lowestBalance = round($lowestBalance, 2);
         $allTimeHigh = round($allTimeHigh, 2);
