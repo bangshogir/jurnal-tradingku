@@ -188,6 +188,7 @@ class DashboardController extends Controller
             'todayTradesCount',
             'todayProfit',
             'currentBalance',
+            'initialBalance',
             'chartData',
             'filter',
             'dateFilter'
