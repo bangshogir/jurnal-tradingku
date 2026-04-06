@@ -256,7 +256,7 @@ public:
       y += rh;
       if(!MkLabel(m_lbl_balance, "Bal",    "Balance: --",    15, y, 315, y + 20)) return false; y += rh;
       if(!MkLabel(m_lbl_risk,    "LR",     "Risk (%):",      15, y,  90, y + 20)) return false;
-      if(!MkEdit(m_edt_risk,     "ER",     "1.0",            100, y, 200, y + 20)) return false;
+      if(!MkEdit(m_edt_risk,     "ER",     DoubleToString(InpRiskPerTrade, 1), 100, y, 200, y + 20)) return false;
       if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       210, y, 315, y + 20)) return false;
       y += rh;
       if(!MkLabel(m_lbl_entry,   "LE",     "Entry Price:",   15, y, 105, y + 20)) return false;
@@ -601,10 +601,8 @@ void PlaceMomentumOrder(bool isBullish, int index = 1) {
    int digits = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
    string comment = isBullish ? "MOMENTUM_BUY" : "MOMENTUM_SELL";
    
-   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-   string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
-   bool isCent = (StringFind(accCurr, "USC") >= 0 || StringFind(accCurr, "ent") >= 0);
-   double riskAmount = balance * (InpRiskPerTrade / 100.0);
+   // Calculates Risk in Money using the Risk Panel setup (so it supports both % and $)
+   double riskAmount = ExtPanel.AdjRisk();
    
    if(isBullish) {
       double entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
