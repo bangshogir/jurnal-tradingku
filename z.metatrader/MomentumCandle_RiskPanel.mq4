@@ -27,6 +27,16 @@ public:
       int tk = OrderSend(sym, OP_SELLLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrCrimson);
       return tk > 0;
    }
+   bool Buy(double vol, double price, string sym, double sl, double tp, string comment) {
+      RefreshRates();
+      int tk = OrderSend(sym, OP_BUY, vol, price, 10, sl, tp, comment, 0, 0, clrDodgerBlue);
+      return tk > 0;
+   }
+   bool Sell(double vol, double price, string sym, double sl, double tp, string comment) {
+      RefreshRates();
+      int tk = OrderSend(sym, OP_SELL, vol, price, 10, sl, tp, comment, 0, 0, clrCrimson);
+      return tk > 0;
+   }
    bool BuyStop(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
       RefreshRates();
       int tk = OrderSend(sym, OP_BUYSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrDodgerBlue);
@@ -58,8 +68,14 @@ CTradeMT4 ExtTrade;
 //=====================================================================
 // [1] INPUT PARAMETERS
 //=====================================================================
+enum ENUM_ENTRY_MODE {
+   ENTRY_LIMIT_PULLBACK = 0, // Pullback (Limit Order)
+   ENTRY_MARKET_INSTANT = 1  // Instant (Market Execution)
+};
+
 input string _sec0_ = "=== Momentum Candle Strategy ===";
 input bool   InpEnableMomentumAuto       = false;      // Enable Auto Trading
+input ENUM_ENTRY_MODE InpEntryMode       = ENTRY_LIMIT_PULLBACK; // Entry Style
 input double InpBodyPercentage           = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage           = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod                = 14;         // Periode ATR
@@ -605,43 +621,63 @@ void PlaceMomentumOrder(bool isBullish, int index = 1) {
    double riskAmount = ExtPanel.AdjRisk();
    
    if(isBullish) {
-      double entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
+      double entryPrice = 0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+         entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
+      else
+         entryPrice = NormalizeDouble(MarketInfo(Symbol(), MODE_ASK), digits);
+         
       double slPrice    = NormalizeDouble(low - (InpSLBuffer * pt), digits);
       double tpPrice    = NormalizeDouble(high + (range * InpFibExtension), digits);
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, Symbol());
       if(lot > 0) {
-         int tk = OrderSend(Symbol(), OP_BUYLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrDodgerBlue);
+         int tk = 0;
+         if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+            tk = OrderSend(Symbol(), OP_BUYLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrDodgerBlue);
+         else
+            tk = OrderSend(Symbol(), OP_BUY, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrDodgerBlue);
+            
          if(tk > 0) {
-            Print("Placed Bullish Momentum BuyLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+            Print("Placed Bullish Momentum ", (InpEntryMode==ENTRY_LIMIT_PULLBACK?"BuyLimit":"Buy"), " at ", entryPrice, " SL:", slPrice, " TP:", tpPrice);
          } else {
-            string errStr = "Failed BuyLimit. Error " + IntegerToString(GetLastError());
+            string errStr = "Failed " + (string)(InpEntryMode==ENTRY_LIMIT_PULLBACK?"BuyLimit":"Buy") + ". Error " + IntegerToString(GetLastError());
             Print(errStr); SendAlertToWebhook(errStr);
          }
       } else {
          string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
          Print(msg);
-         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka bahkan sekadar Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
          Print(msg); SendAlertToWebhook(msg);
       }
    } else {
-      double entryPrice = NormalizeDouble(low + (range * InpFibRetracement), digits);
+      double entryPrice = 0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+         entryPrice = NormalizeDouble(low + (range * InpFibRetracement), digits);
+      else
+         entryPrice = NormalizeDouble(MarketInfo(Symbol(), MODE_BID), digits);
+         
       double slPrice    = NormalizeDouble(high + (InpSLBuffer * pt), digits);
       double tpPrice    = NormalizeDouble(low - (range * InpFibExtension), digits);
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, Symbol());
       if(lot > 0) {
-         int tk = OrderSend(Symbol(), OP_SELLLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrCrimson);
+         int tk = 0;
+         if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+            tk = OrderSend(Symbol(), OP_SELLLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrCrimson);
+         else
+            tk = OrderSend(Symbol(), OP_SELL, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrCrimson);
+            
          if(tk > 0) {
-            Print("Placed Bearish Momentum SellLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+            Print("Placed Bearish Momentum ", (InpEntryMode==ENTRY_LIMIT_PULLBACK?"SellLimit":"Sell"), " at ", entryPrice, " SL:", slPrice, " TP:", tpPrice);
          } else {
-            string errStr = "Failed SellLimit. Error " + IntegerToString(GetLastError());
+            string errStr = "Failed " + (string)(InpEntryMode==ENTRY_LIMIT_PULLBACK?"SellLimit":"Sell") + ". Error " + IntegerToString(GetLastError());
             Print(errStr); SendAlertToWebhook(errStr);
          }
       } else {
          string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
          Print(msg);
-         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka bahkan sekadar Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
          Print(msg); SendAlertToWebhook(msg);
       }
    }

@@ -19,8 +19,14 @@ CTrade ExtTrade;
 //=====================================================================
 // [1] INPUT PARAMETERS
 //=====================================================================
+enum ENUM_ENTRY_MODE {
+   ENTRY_LIMIT_PULLBACK = 0, // Pullback (Limit Order)
+   ENTRY_MARKET_INSTANT = 1  // Instant (Market Execution)
+};
+
 input group "=== Momentum Candle Strategy ==="
 input bool   InpEnableMomentumAuto       = false;      // Enable Auto Trading
+input ENUM_ENTRY_MODE InpEntryMode       = ENTRY_LIMIT_PULLBACK; // Entry Style
 input double InpBodyPercentage           = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage           = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod                = 14;         // Periode ATR
@@ -594,43 +600,63 @@ void PlaceMomentumOrder(bool isBullish, int index = 1) {
    ExtTrade.SetExpertMagicNumber(g_momentum_magic_number);
    
    if(isBullish) {
-      double entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
+      double entryPrice = 0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+         entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
+      else
+         entryPrice = NormalizeDouble(SymbolInfoDouble(_Symbol, SYMBOL_ASK), digits);
+         
       double slPrice    = NormalizeDouble(low - (InpSLBuffer * pt), digits);
       double tpPrice    = NormalizeDouble(high + (range * InpFibExtension), digits);
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, _Symbol);
       if(lot > 0) {
-         bool res = ExtTrade.BuyLimit(lot, entryPrice, _Symbol, slPrice, tpPrice, ORDER_TIME_GTC, 0, comment);
+         bool res = false;
+         if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+            res = ExtTrade.BuyLimit(lot, entryPrice, _Symbol, slPrice, tpPrice, ORDER_TIME_GTC, 0, comment);
+         else
+            res = ExtTrade.Buy(lot, _Symbol, entryPrice, slPrice, tpPrice, comment);
+            
          if(res) {
-            Print("Placed Bullish Momentum BuyLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+            Print("Placed Bullish Momentum ", (InpEntryMode==ENTRY_LIMIT_PULLBACK?"BuyLimit":"Buy"), " at ", entryPrice, " SL:", slPrice, " TP:", tpPrice);
          } else {
-            string errStr = "Failed BuyLimit. Error " + IntegerToString(GetLastError());
+            string errStr = "Failed " + (string)(InpEntryMode==ENTRY_LIMIT_PULLBACK?"BuyLimit":"Buy") + ". Error " + IntegerToString(GetLastError());
             Print(errStr); SendAlertToWebhook(errStr);
          }
       } else {
          string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
          Print(msg);
-         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
          Print(msg); SendAlertToWebhook(msg);
       }
    } else {
-      double entryPrice = NormalizeDouble(low + (range * InpFibRetracement), digits);
+      double entryPrice = 0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+         entryPrice = NormalizeDouble(low + (range * InpFibRetracement), digits);
+      else
+         entryPrice = NormalizeDouble(SymbolInfoDouble(_Symbol, SYMBOL_BID), digits);
+         
       double slPrice    = NormalizeDouble(high + (InpSLBuffer * pt), digits);
       double tpPrice    = NormalizeDouble(low - (range * InpFibExtension), digits);
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, _Symbol);
       if(lot > 0) {
-         bool res = ExtTrade.SellLimit(lot, entryPrice, _Symbol, slPrice, tpPrice, ORDER_TIME_GTC, 0, comment);
+         bool res = false;
+         if(InpEntryMode == ENTRY_LIMIT_PULLBACK)
+            res = ExtTrade.SellLimit(lot, entryPrice, _Symbol, slPrice, tpPrice, ORDER_TIME_GTC, 0, comment);
+         else
+            res = ExtTrade.Sell(lot, _Symbol, entryPrice, slPrice, tpPrice, comment);
+            
          if(res) {
-            Print("Placed Bearish Momentum SellLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+            Print("Placed Bearish Momentum ", (InpEntryMode==ENTRY_LIMIT_PULLBACK?"SellLimit":"Sell"), " at ", entryPrice, " SL:", slPrice, " TP:", tpPrice);
          } else {
-            string errStr = "Failed SellLimit. Error " + IntegerToString(GetLastError());
+            string errStr = "Failed " + (string)(InpEntryMode==ENTRY_LIMIT_PULLBACK?"SellLimit":"Sell") + ". Error " + IntegerToString(GetLastError());
             Print(errStr); SendAlertToWebhook(errStr);
          }
       } else {
          string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
          Print(msg);
-         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
          Print(msg); SendAlertToWebhook(msg);
       }
    }
