@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//|                              RiskPanel_JurnalTradingku.mq4       |
-//|          Risk Panel + Webhook Journal Sync untuk MT4             |
-//|                           Copyright 2026, Antigravity            |
+//|                     MomentumCandle_RiskPanel.mq4                 |
+//|         Risk Panel + Webhook Sync + Momentum Candle Strategy     |
+//|                        Copyright 2026, Antigravity               |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Antigravity"
 #property link      "https://jurnaltradingku.my.id"
@@ -19,22 +19,22 @@ class CTradeMT4 {
 public:
    bool BuyLimit(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
       RefreshRates();
-      int tk = OrderSend(sym, OP_BUYLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrBlue);
+      int tk = OrderSend(sym, OP_BUYLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrDodgerBlue);
       return tk > 0;
    }
    bool SellLimit(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
       RefreshRates();
-      int tk = OrderSend(sym, OP_SELLLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrRed);
+      int tk = OrderSend(sym, OP_SELLLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrCrimson);
       return tk > 0;
    }
    bool BuyStop(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
       RefreshRates();
-      int tk = OrderSend(sym, OP_BUYSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrBlue);
+      int tk = OrderSend(sym, OP_BUYSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrDodgerBlue);
       return tk > 0;
    }
    bool SellStop(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
       RefreshRates();
-      int tk = OrderSend(sym, OP_SELLSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrRed);
+      int tk = OrderSend(sym, OP_SELLSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrCrimson);
       return tk > 0;
    }
    bool PositionClose(int ticket, int slippage=10) {
@@ -58,6 +58,18 @@ CTradeMT4 ExtTrade;
 //=====================================================================
 // [1] INPUT PARAMETERS
 //=====================================================================
+input string _sec0_ = "=== Momentum Candle Strategy ===";
+input bool   InpEnableMomentumAuto       = false;      // Enable Auto Trading
+input double InpBodyPercentage           = 0.75;       // Min body ratio (75%)
+input double InpWickPercentage           = 0.10;       // Max opposite wick ratio (10%)
+input int    InpATRPeriod                = 14;         // Periode ATR
+input double InpATRMultiplier            = 1.5;        // Min candle size vs ATR
+input double InpFibRetracement           = 0.236;      // Entry pullback level (23.6%)
+input double InpFibExtension             = 0.27;       // TP extension level (27%)
+input double InpSLBuffer                 = 30.0;       // Buffer SL (points)
+input double InpRiskPerTrade             = 1.0;        // Risk per trade (%)
+input int    InpHistoryBars              = 600;        // Historikal Bars Discan (Panah)
+
 input string  _sec1_ = "=== Webhook / Journal ===";
 input string  InpWebhookURL   = "http://jurnaltradingku.my.id/api/webhook/trading-log"; // Webhook URL
 input string  InpWebhookToken = "";    // Webhook API Token
@@ -74,6 +86,8 @@ int      g_obj_id             = 0;
 int      g_active_tickets[];
 int      g_last_history_total = 0;
 bool     g_resync_done        = false;
+datetime g_last_processed_bar = 0;
+int      g_momentum_magic_number = 20260402;
 
 string NextID() { return IntegerToString(++g_obj_id); }
 
@@ -153,16 +167,16 @@ class CRiskPanel : public CAppDialog
 public:
    CLabel    m_lbl_balance, m_lbl_risk, m_lbl_entry, m_lbl_sl;
    CLabel    m_lbl_ratio,   m_lbl_lot,  m_lbl_status;
-   CLabel    m_lbl_pair,    m_lbl_info;
+   CLabel    m_lbl_pair,    m_lbl_info, m_lbl_footer;
    CEdit     m_edt_risk, m_edt_entry, m_edt_sl;
    CComboBox m_cbx_ratio;
    CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
    bool      m_cl_active;
    bool      m_risk_in_percent;
 
-   bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); return Add(l); }
-   bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); return Add(e); }
-   bool      MkButton(CButton &b, string n, string t, int x1, int y1, int x2, int y2){ if(!b.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; b.Text(t); return Add(b); }
+   bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); l.FontSize(8); return Add(l); }
+   bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); e.FontSize(8); return Add(e); }
+   bool      MkButton(CButton &b, string n, string t, int x1, int y1, int x2, int y2){ if(!b.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; b.Text(t); b.FontSize(8); return Add(b); }
    void      SetStatus(string t) { m_lbl_status.Text("Status: " + t); }
    bool      IsCent() { string c = AccountInfoString(ACCOUNT_CURRENCY); return StringFind(c, "USC") >= 0 || StringFind(c, "ent") >= 0; }
    string    AccCurr() { return IsCent() ? "USD" : AccountInfoString(ACCOUNT_CURRENCY); }
@@ -237,28 +251,29 @@ public:
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
       int y = 10, rh = 30;
-      if(!MkLabel(m_lbl_pair,    "LPair",  Symbol(),          5, y, 75,  y + 20)) return false;
-      if(!MkLabel(m_lbl_info,    "LInfo",  "Risk Panel v1.0", 85, y, 270, y + 20)) return false;
+      if(!MkLabel(m_lbl_pair,    "LPair",  Symbol(),          15, y, 150,  y + 20)) return false;
+      if(!MkLabel(m_lbl_info,    "LInfo",  "Risk Panel v1.0", 180, y, 315, y + 20)) return false;
       y += rh;
-      if(!MkLabel(m_lbl_balance, "Bal",    "Balance: --",    15, y, 260, y + 20)) return false; y += rh;
+      if(!MkLabel(m_lbl_balance, "Bal",    "Balance: --",    15, y, 315, y + 20)) return false; y += rh;
       if(!MkLabel(m_lbl_risk,    "LR",     "Risk (%):",      15, y,  90, y + 20)) return false;
-      if(!MkEdit(m_edt_risk,     "ER",     "1.0",            95, y, 180, y + 20)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       190, y, 260, y + 20)) return false;
+      if(!MkEdit(m_edt_risk,     "ER",     "1.0",            100, y, 200, y + 20)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       210, y, 315, y + 20)) return false;
       y += rh;
       if(!MkLabel(m_lbl_entry,   "LE",     "Entry Price:",   15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_entry,    "EE",     "",              110, y, 260, y + 20)) return false; y += rh;
+      if(!MkEdit(m_edt_entry,    "EE",     "",              110, y, 315, y + 20)) return false; y += rh;
       if(!MkLabel(m_lbl_sl,      "LS",     "Stop Loss:",     15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_sl,       "ES",     "",              110, y, 260, y + 20)) return false; y += rh;
+      if(!MkEdit(m_edt_sl,       "ES",     "",              110, y, 315, y + 20)) return false; y += rh;
       if(!MkLabel(m_lbl_ratio,   "LRt",    "Risk Ratio:",   15, y, 105, y + 20)) return false;
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, 110, y, 260, y + 20)) return false;
+      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, 110, y, 315, y + 20)) return false;
       if(!Add(m_cbx_ratio)) return false;
       m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15); m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30); m_cbx_ratio.Select(2); y += rh;
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", 15, y, 260, y + 20)) return false; y += rh;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",     10, y,  85, y + 25)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "PLACE ORDER", 90, y, 185, y + 25)) return false;
+      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", 15, y, 315, y + 20)) return false; y += rh;
+      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",     15, y,  85, y + 25)) return false;
+      if(!MkButton(m_btn_place,   "BP",  "PLACE ORDER", 95, y, 225, y + 25)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",     190, y, 265, y + 25)) return false; y += 35;
-      if(!MkLabel(m_lbl_status,   "LSt", "Status: Ready", 15, y, 260, y + 30)) return false;
+      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",     235, y, 315, y + 25)) return false; y += 35;
+      if(!MkLabel(m_lbl_status,   "LSt", "Status: Ready", 15, y, 315, y + 20)) return false; y += 20;
+      if(!MkLabel(m_lbl_footer,   "LFtr", "Auto Momentum: OFF | Signal: None", 15, y, 315, y + 20)) return false;
       return true;
    }
 
@@ -363,9 +378,35 @@ void SendTradeDataToWebhook(int ticket, string eventType)
    } else if(res != 200 && res != 201) {
       Print("WEBHOOK SERVER ERROR! HTTP ", res, " | Ticket: ", ticket, " Event: ", eventType);
       Print("Server Reply: ", CharArrayToString(resW));
-   } else {
-      Print("Webhook OK! Ticket ", ticket, " Event: ", eventType);
    }
+  }
+
+void SendAlertToWebhook(string message)
+  {
+   if(InpWebhookURL == "" || InpWebhookToken == "") return;
+
+   string accLogin   = IntegerToString((int)AccountInfoInteger(ACCOUNT_LOGIN));
+   string accServer  = AccountInfoString(ACCOUNT_SERVER);
+   string accountName = accLogin + " - " + accServer;
+   StringReplace(accountName, "\"", "\\\"");
+   
+   string safeMsg = message;
+   StringReplace(safeMsg, "\"", "\\\"");
+   StringReplace(safeMsg, "\n", " ");
+   
+   string json = "{";
+   json += "\"account_name\": \"" + accountName + "\",";
+   json += "\"type\": \"alert\",";
+   json += "\"symbol\": \"" + Symbol() + "\",";
+   json += "\"comment\": \"" + safeMsg + "\"";
+   json += "}";
+
+   string headers = "Content-Type: application/json\r\nX-Webhook-Token: " + InpWebhookToken + "\r\n";
+   char post[], resW[];
+   StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
+   int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
+   string resHeaders;
+   WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
   }
 
 void InitialHistorySync()
@@ -407,7 +448,6 @@ void InitialHistorySync()
       if(ot <= OP_SELL) { SendTradeDataToWebhook(current_tickets[i], "deal_open"); openCount++; }
       else SendTradeDataToWebhook(current_tickets[i], "pending_order");
      }
-   Print("ResyncHistory: sent ", openCount, " open positions. DONE.");
   }
 
 void PollTradeEvents()
@@ -453,20 +493,184 @@ void PollTradeEvents()
   }
 
 //=====================================================================
-// [7] EVENT HANDLERS
+// [7] MOMENTUM INDICATOR & DETECTOR
+//=====================================================================
+void DrawMomentumArrow(bool isBullish, int index) {
+   double high = iHigh(Symbol(), Period(), index);
+   double low  = iLow(Symbol(), Period(), index);
+   double range = high - low;
+   string objName = (isBullish ? "MomUp_" : "MomDn_") + TimeToString(iTime(Symbol(), Period(), index));
+   if(ObjectFind(0, objName) >= 0) return; // Prevent duplicate
+   
+   if(isBullish) {
+      ObjectCreate(0, objName, OBJ_ARROW_UP, 0, iTime(Symbol(), Period(), index), low - (range * 0.2));
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrDodgerBlue);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_BACK, true);
+      ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bullish Momentum Candle");
+   } else {
+      ObjectCreate(0, objName, OBJ_ARROW_DOWN, 0, iTime(Symbol(), Period(), index), high + (range * 0.2));
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrCrimson);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_BACK, true);
+      ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bearish Momentum Candle");
+   }
+}
+
+void ScanHistoricalMomentum() {
+   int total = iBars(Symbol(), Period());
+   int start = MathMin(InpHistoryBars, total - 2);
+   for(int i = start; i >= 1; i--) {
+      if(IsBullishMomentum(i)) DrawMomentumArrow(true, i);
+      else if(IsBearishMomentum(i)) DrawMomentumArrow(false, i);
+   }
+}
+
+bool IsBullishMomentum(int index = 1) {
+   double atr   = iATR(Symbol(), Period(), InpATRPeriod, index);
+   double high  = iHigh(Symbol(), Period(), index);
+   double low   = iLow(Symbol(), Period(), index);
+   double open  = iOpen(Symbol(), Period(), index);
+   double close = iClose(Symbol(), Period(), index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   if(totalLength <= atr * InpATRMultiplier) return false;
+   if(close <= open) return false; 
+   double bodyLength = close - open;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   double lowerWick = open - low;
+   if(lowerWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+bool IsBearishMomentum(int index = 1) {
+   double atr   = iATR(Symbol(), Period(), InpATRPeriod, index);
+   double high  = iHigh(Symbol(), Period(), index);
+   double low   = iLow(Symbol(), Period(), index);
+   double open  = iOpen(Symbol(), Period(), index);
+   double close = iClose(Symbol(), Period(), index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   if(totalLength <= atr * InpATRMultiplier) return false;
+   if(open <= close) return false; 
+   double bodyLength = open - close;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   double upperWick = high - open;
+   if(upperWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+//=====================================================================
+// [8] TRADE MANAGER
+//=====================================================================
+bool HasOpenPositionOrPending() {
+   for(int i = 0; i < OrdersTotal(); i++) {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
+         if(OrderSymbol() == Symbol() && OrderMagicNumber() == g_momentum_magic_number) return true;
+      }
+   }
+   return false;
+}
+
+void ManageExpiredOrders() {
+   for(int i = OrdersTotal() - 1; i >= 0; i--) {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
+         if(OrderSymbol() == Symbol() && OrderMagicNumber() == g_momentum_magic_number && OrderType() > OP_SELL) {
+            datetime setupTime = OrderOpenTime();
+            int barsPassed = iBarShift(Symbol(), Period(), setupTime);
+            if(barsPassed >= 3) {
+               bool res = ::OrderDelete(OrderTicket(), clrWhite);
+               if(res) Print("Momentum Order Expired (>3 candles): ", OrderTicket());
+            }
+         }
+      }
+   }
+}
+
+void PlaceMomentumOrder(bool isBullish, int index = 1) {
+   double high = iHigh(Symbol(), Period(), index);
+   double low  = iLow(Symbol(), Period(), index);
+   double range = high - low;
+   double pt = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
+   string comment = isBullish ? "MOMENTUM_BUY" : "MOMENTUM_SELL";
+   
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
+   bool isCent = (StringFind(accCurr, "USC") >= 0 || StringFind(accCurr, "ent") >= 0);
+   double riskAmount = balance * (InpRiskPerTrade / 100.0);
+   
+   if(isBullish) {
+      double entryPrice = NormalizeDouble(high - (range * InpFibRetracement), digits);
+      double slPrice    = NormalizeDouble(low - (InpSLBuffer * pt), digits);
+      double tpPrice    = NormalizeDouble(high + (range * InpFibExtension), digits);
+      
+      double lot = CalcLotSize(riskAmount, entryPrice, slPrice, Symbol());
+      if(lot > 0) {
+         int tk = OrderSend(Symbol(), OP_BUYLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrDodgerBlue);
+         if(tk > 0) {
+            Print("Placed Bullish Momentum BuyLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+         } else {
+            string errStr = "Failed BuyLimit. Error " + IntegerToString(GetLastError());
+            Print(errStr); SendAlertToWebhook(errStr);
+         }
+      } else {
+         string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
+         Print(msg);
+         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka bahkan sekadar Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         Print(msg); SendAlertToWebhook(msg);
+      }
+   } else {
+      double entryPrice = NormalizeDouble(low + (range * InpFibRetracement), digits);
+      double slPrice    = NormalizeDouble(high + (InpSLBuffer * pt), digits);
+      double tpPrice    = NormalizeDouble(low - (range * InpFibExtension), digits);
+      
+      double lot = CalcLotSize(riskAmount, entryPrice, slPrice, Symbol());
+      if(lot > 0) {
+         int tk = OrderSend(Symbol(), OP_SELLLIMIT, lot, entryPrice, 10, slPrice, tpPrice, comment, g_momentum_magic_number, 0, clrCrimson);
+         if(tk > 0) {
+            Print("Placed Bearish Momentum SellLimit at ", entryPrice, " SL: ", slPrice, " TP: ", tpPrice);
+         } else {
+            string errStr = "Failed SellLimit. Error " + IntegerToString(GetLastError());
+            Print(errStr); SendAlertToWebhook(errStr);
+         }
+      } else {
+         string msg = "Gagal Open Posisi: Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
+         Print(msg);
+         if(lot == -2) msg += " | Risk 1% (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka bahkan sekadar Lot minimum broker pada jarak SL " + DoubleToString(MathAbs(entryPrice-slPrice)/pt, 0) + " points!";
+         Print(msg); SendAlertToWebhook(msg);
+      }
+   }
+}
+
+//=====================================================================
+// [9] EVENT HANDLERS
 //=====================================================================
 int OnInit()
   {
    ChartSetInteger(0, CHART_FOREGROUND, false);
-   if(!ExtPanel.Create(0, "Risk Panel - Jurnal Tradingku", 0, 20, 30, 295, 400)) return INIT_FAILED;
+   if(!ExtPanel.Create(0, "Momentum Risk Panel MT4", 0, 20, 30, 345, 420)) return INIT_FAILED;
    ExtPanel.Run();
-   Print("RiskPanel v1.00 Ready. Webhook: ", (InpWebhookURL != "" ? "ON" : "OFF"));
+   
+   ScanHistoricalMomentum();
+   
+   Print("MomentumCandle EA v1.00 Ready for MT4. Auto: ", (InpEnableMomentumAuto?"ON":"OFF"));
    return INIT_SUCCEEDED;
   }
 
 void OnDeinit(const int reason)
   {
    ExtPanel.Destroy(reason);
+   for(int i=ObjectsTotal()-1;i>=0;i--) {
+      string n=ObjectName(i);
+      if(StringFind(n,"MomUp_")==0 || StringFind(n,"MomDn_")==0) ObjectDelete(0,n);
+   }
   }
 
 void OnTick()
@@ -477,6 +681,30 @@ void OnTick()
    ExtPanel.UpdateStats();
    CheckCutLoss();
    CheckAutoCloseFriday();
+   
+   string sigStr = "No Signal \x2717";
+   if(IsBullishMomentum(1)) sigStr = "Bullish \x2713";
+   else if(IsBearishMomentum(1)) sigStr = "Bearish \x2713";
+   ExtPanel.m_lbl_footer.Text("Auto Momentum: " + (InpEnableMomentumAuto ? "ON" : "OFF") + " | " + sigStr);
+
+   datetime currentBarTime = iTime(Symbol(), Period(), 0);
+   if(currentBarTime != g_last_processed_bar)
+     {
+      ManageExpiredOrders();
+      
+      bool isBull = IsBullishMomentum(1);
+      bool isBear = IsBearishMomentum(1);
+      
+      if(isBull) DrawMomentumArrow(true, 1);
+      else if(isBear) DrawMomentumArrow(false, 1);
+      
+      if(InpEnableMomentumAuto && !HasOpenPositionOrPending())
+        {
+         if(isBull) PlaceMomentumOrder(true, 1);
+         else if(isBear) PlaceMomentumOrder(false, 1);
+        }
+      g_last_processed_bar = currentBarTime;
+     }
   }
 
 void OnChartEvent(const int id, const long &lp, const double &dp, const string &sp)

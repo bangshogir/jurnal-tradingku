@@ -118,7 +118,8 @@ double CalcLotSize(double risk, double entry, double sl, string symbol)
 //=====================================================================
 void CheckCutLoss()
   {
-   double cls   = iClose(_Symbol, _Period, 1);
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    int    total = PositionsTotal();
    for(int i = total - 1; i >= 0; i--)
      {
@@ -131,7 +132,7 @@ void CheckCutLoss()
       double cut  = StringToDouble(StringSubstr(comment, idx + 3));
       if(cut == 0) continue;
       bool is_buy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
-      bool do_cut = is_buy ? (cls < cut) : (cls > cut);
+      bool do_cut = is_buy ? (bid <= cut) : (ask >= cut);
       if(do_cut) ExtTrade.PositionClose(ticket, 10);
      }
   }
@@ -438,6 +439,34 @@ void SendTradeDataToWebhook(ulong ticket, string eventType)
    }
   }
 
+void SendAlertToWebhook(string message)
+  {
+   if(InpWebhookURL == "" || InpWebhookToken == "") return;
+
+   string accLogin   = IntegerToString((int)AccountInfoInteger(ACCOUNT_LOGIN));
+   string accServer  = AccountInfoString(ACCOUNT_SERVER);
+   string accountName = accLogin + " - " + accServer;
+   StringReplace(accountName, "\"", "\\\"");
+   
+   string safeMsg = message;
+   StringReplace(safeMsg, "\"", "\\\"");
+   StringReplace(safeMsg, "\n", " ");
+   
+   string json = "{";
+   json += "\"account_name\": \"" + accountName + "\",";
+   json += "\"type\": \"alert\",";
+   json += "\"symbol\": \"" + _Symbol + "\",";
+   json += "\"comment\": \"" + safeMsg + "\"";
+   json += "}";
+
+   string headers = "Content-Type: application/json\r\nX-Webhook-Token: " + InpWebhookToken + "\r\n";
+   char post[], resW[];
+   StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
+   int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
+   string resHeaders;
+   WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
+  }
+
 void ResyncHistory()
   {
    if(InpResyncDays <= 0 || InpWebhookURL == "") return;
@@ -638,8 +667,15 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
    double stopLoss = isDemand ? (zoneBtm - InpBufferPoints*pt) : (zoneTop + InpBufferPoints*pt);
    entryPrice = NormalizeDouble(entryPrice, digits);
    stopLoss = NormalizeDouble(stopLoss, digits);
-   double lot = CalcLotSize(ExtPanel.AdjRisk(), entryPrice, stopLoss, _Symbol);
-   if(lot <= 0) return;
+   double riskAmount = ExtPanel.AdjRisk();
+   double lot = CalcLotSize(riskAmount, entryPrice, stopLoss, _Symbol);
+   if(lot <= 0) {
+      string msg = "Gagal Open Posisi (AutoSnD): Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
+      Print(msg);
+      if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL!";
+      Print(msg); SendAlertToWebhook(msg);
+      return;
+   }
    long val = ExtPanel.m_cbx_ratio.Value(); if(val == 0) val = 10;
    double mult = val / 10.0;
    double diff = MathAbs(entryPrice - stopLoss);
@@ -661,6 +697,9 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
      {
       MarkZoneTraded(zoneTime);
       Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
+     } else {
+      string errStr = "Failed AutoSnD " + (string)(isDemand?"BuyLimit":"SellLimit") + ". Error " + IntegerToString(GetLastError());
+      Print(errStr); SendAlertToWebhook(errStr);
      }
   }
 

@@ -36,6 +36,40 @@ class TradingWebhookController extends Controller
             return response()->json(['message' => 'Unauthorized. Invalid token.'], 401);
         }
 
+        // Handle EA Alerts (Errors / Notifications without DB logging)
+        if ($request->input('type') === 'alert') {
+            $accName = $request->input('account_name') ?? null;
+            $targetChatId = $user->telegram_chat_id;
+            $accountLabel = '';
+
+            if ($accName) {
+                preg_match('/^(\d+)/', $accName, $matches);
+                $accountLogin = $matches[1] ?? $accName;
+
+                $route = \App\Models\TelegramRouting::where('user_id', $user->id)
+                    ->where(function($q) use ($accName, $accountLogin) {
+                        $q->where('account_number', $accName)
+                          ->orWhere('account_number', $accountLogin);
+                    })->first();
+
+                if ($route && !empty($route->telegram_chat_id)) {
+                    $targetChatId = $route->telegram_chat_id;
+                    $accountLabel = $route->description ? $route->description : "Acc: {$accountLogin}";
+                } else {
+                    $accountLabel = "Acc: {$accountLogin}";
+                }
+            }
+
+            if (!empty($targetChatId)) {
+                $msg = "<b>[⚠️ EA ALERT]</b>\n";
+                if ($accountLabel) $msg .= "👤 {$accountLabel}\n";
+                if ($request->input('symbol')) $msg .= "Pair: <b>" . $request->input('symbol') . "</b>\n";
+                $msg .= "\n" . $request->input('comment');
+                \App\Services\TelegramService::sendMessage($msg, $targetChatId);
+            }
+            return response()->json(['message' => 'Alert relayed to Telegram'], 200);
+        }
+
         // Validate incoming data
         $validated = $request->validate([
             'ticket_id'    => 'required|string',
