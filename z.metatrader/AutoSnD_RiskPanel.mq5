@@ -245,7 +245,7 @@ public:
    
    void      OnRiskModeToggle() {
       m_risk_in_percent = !m_risk_in_percent;
-      m_btn_risk_mode.Text(m_risk_in_percent ? "MODE: %" : "MODE: $");
+      m_btn_risk_mode.Text(m_risk_in_percent ? " % " : " $ ");
       m_lbl_risk.Text(m_risk_in_percent ? "Risk (%):" : "Risk ($):");
       UpdateLot();
    }
@@ -325,9 +325,9 @@ public:
       int lbl = 95;   // Label column width (lx to lx+lbl-1 = edits start at lx+lbl+3)
       int ex  = lx + lbl + 3; // Edit/widget X start = 108
 
-      // Row 1: Symbol | AutoSnD Status (symbol diberi lebar 75px agar tidak overlap)
-      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+75, y+16)) return false;
-      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO: ON" : "AUTO: OFF", lx+78, y, rx, y+16)) return false;
+      // Row 1: Symbol | AutoSnD Status (symbol ~80px lebar, AUTO mulai dari lx+88)
+      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+83, y+16)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO:ON" : "AUTO:OFF", lx+86, y, rx, y+16)) return false;
       y += 22;
 
       // Row 2: Balance
@@ -338,10 +338,10 @@ public:
       if(!MkLabel(m_lbl_atr, "Sep1", "- - - - - - - - - - - - - - - - - -", lx, y, rx, y+14)) return false;
       y += 18;
 
-      // Row 3: Risk + Mode toggle
+      // Row 3: Risk + Mode toggle (text tombol diperpendek untuk padding)
       if(!MkLabel(m_lbl_risk, "LR", "Risk:",    lx, y, ex-3, y+16)) return false;
       if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, 190,  y+16)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", 193, y, rx, y+16)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", " % ", 193, y, rx, y+16)) return false;
       y += rh;
 
       // Row 4: Entry Price
