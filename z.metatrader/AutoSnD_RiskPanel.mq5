@@ -325,70 +325,69 @@ public:
       int lbl = 95;   // Label column width (lx to lx+lbl-1 = edits start at lx+lbl+3)
       int ex  = lx + lbl + 3; // Edit/widget X start = 108
 
-      // Row 1: Symbol + AutoSnD Status
-      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+55, y+16)) { Print("[DEBUG] FAIL: LPair"); return false; }
-      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO: ON" : "AUTO: OFF", lx+60, y, rx, y+16)) { Print("[DEBUG] FAIL: LSpread"); return false; }
-      y += 20;
+      // Row 1: Symbol | AutoSnD Status (symbol diberi lebar 75px agar tidak overlap)
+      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+75, y+16)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO: ON" : "AUTO: OFF", lx+78, y, rx, y+16)) return false;
+      y += 22;
 
       // Row 2: Balance
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+16)) { Print("[DEBUG] FAIL: Balance"); return false; }
-      y += 20;
+      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+16)) return false;
+      y += 22;
 
-      // Separator 1
-      if(!MkLabel(m_lbl_atr, "Sep1", "- - - - - - - - - - - - -", lx, y, rx, y+12)) { Print("[DEBUG] FAIL: Sep1"); return false; }
-      y += 14;
+      // Separator 1 (gap yang lebih lapang agar tidak menimpa baris Risk)
+      if(!MkLabel(m_lbl_atr, "Sep1", "- - - - - - - - - - - - - - - - - -", lx, y, rx, y+14)) return false;
+      y += 18;
 
-      // Row 3: Risk + Mode button
-      if(!MkLabel(m_lbl_risk, "LR", "Risk:",    lx, y, ex-3, y+16)) { Print("[DEBUG] FAIL: LRisk"); return false; }
-      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, 195,  y+16)) { Print("[DEBUG] FAIL: ERisk"); return false; }
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", 199, y, rx, y+16)) { Print("[DEBUG] FAIL: BRM"); return false; }
+      // Row 3: Risk + Mode toggle
+      if(!MkLabel(m_lbl_risk, "LR", "Risk:",    lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, 190,  y+16)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", 193, y, rx, y+16)) return false;
       y += rh;
 
       // Row 4: Entry Price
-      if(!MkLabel(m_lbl_entry, "LE", "Entry:",    lx, y, ex-3, y+16)) { Print("[DEBUG] FAIL: LEntry"); return false; }
-      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, rx,   y+16)) { Print("[DEBUG] FAIL: EEntry"); return false; }
+      if(!MkLabel(m_lbl_entry, "LE", "Entry:",    lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, rx,   y+16)) return false;
       y += rh;
 
       // Row 5: Stop Loss
-      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-3, y+16)) { Print("[DEBUG] FAIL: LSL"); return false; }
-      if(!MkEdit(m_edt_sl,  "ES", "",             ex, y, rx,   y+16)) { Print("[DEBUG] FAIL: ESL"); return false; }
+      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_sl,  "ES", "",             ex, y, rx,   y+16)) return false;
       y += rh;
 
-      // Row 6: RR Ratio
-      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-3, y+16)) { Print("[DEBUG] FAIL: LRatio"); return false; }
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+20)) { Print("[DEBUG] FAIL: CbRatio"); return false; }
-      if(!Add(m_cbx_ratio)) { Print("[DEBUG] FAIL: Add CbRatio"); return false; }
+      // Row 6: RR Ratio (ComboBox min 20px)
+      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-3, y+16)) return false;
+      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+20)) return false;
+      if(!Add(m_cbx_ratio)) return false;
       m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15);
       m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3",  30);
       m_cbx_ratio.Select(2);
       y += rh;
 
       // Row 7: Lot Size
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, rx, y+16)) { Print("[DEBUG] FAIL: LLot"); return false; }
-      y += 20;
+      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, rx, y+16)) return false;
+      y += 22;
 
       // Separator 2
-      if(!MkLabel(m_lbl_footer, "Sep2", "- - - - - - - - - - - - -", lx, y, rx, y+12)) { Print("[DEBUG] FAIL: Sep2"); return false; }
-      y += 14;
+      if(!MkLabel(m_lbl_footer, "Sep2", "- - - - - - - - - - - - - - - - - -", lx, y, rx, y+14)) return false;
+      y += 18;
 
-      // Row 8: Limit Order Buttons
+      // Row 8: Limit Order Buttons (3 kolom)
       int bw = 82;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF", lx,         y, lx+bw,       y+bh)) { Print("[DEBUG] FAIL: BCL, lx=",lx," to ",lx+bw," y=",y); return false; }
-      if(!MkButton(m_btn_place,   "BP",  "LIMIT",   lx+bw+3,    y, lx+bw*2+3,   y+bh)) { Print("[DEBUG] FAIL: BP, from ",lx+bw+3," to ",lx+bw*2+3," y=",y); return false; }
+      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF", lx,         y, lx+bw,     y+bh)) return false;
+      if(!MkButton(m_btn_place,   "BP",  "LIMIT",   lx+bw+3,    y, lx+bw*2+3, y+bh)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",  lx+bw*2+6,  y, rx,           y+bh)) { Print("[DEBUG] FAIL: BC, from ",lx+bw*2+6," to ",rx," y=",y); return false; }
+      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",  lx+bw*2+6,  y, rx,        y+bh)) return false;
       y += bh + 5;
 
-      // Row 9: Market Order Buttons
-      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY  MKT",  lx,  y, 134, y+bh)) { Print("[DEBUG] FAIL: BBM, lx=",lx," to 134 y=",y); return false; }
+      // Row 9: Market Order Buttons (2 kolom)
+      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY  MKT",  lx,  y, 134, y+bh)) return false;
       m_btn_buy_mkt.ColorBackground(C'0,130,80'); m_btn_buy_mkt.Color(clrWhite);
-      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", 138,  y, rx,  y+bh)) { Print("[DEBUG] FAIL: BSM, from 138 to ",rx," y=",y); return false; }
+      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", 138,  y, rx,  y+bh)) return false;
       m_btn_sell_mkt.ColorBackground(C'176,0,32'); m_btn_sell_mkt.Color(clrWhite);
       y += bh + 8;
 
       // Row 10: Status
-      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+16)) { Print("[DEBUG] FAIL: Status, y=",y); return false; }
-      Print("[DEBUG] Panel Create() SUCCESS, final y=", y);
+      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+16)) return false;
       return true;
    }
    virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
