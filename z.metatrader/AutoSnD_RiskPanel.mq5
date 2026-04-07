@@ -316,85 +316,78 @@ public:
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
 
-      // -----------------------------------------------
-      // Layout grid (inner usable width = ~263px)
-      // px=8 (left pad), right boundary = 263
-      // lw=82 (label col), ex=93 (edit starts)
-      // -----------------------------------------------
-      int lx = 8;    // Label X start
-      int ex = 93;   // Edit/Widget X start
-      int re = 263;  // Right boundary
-      int rh = 24;   // Row height (compact)
-      int bh = 22;   // Button height
-      int y  = 6;    // Current Y position
+      // Layout constants (koordinat terbukti aman sampai x=265)
+      int lx  = 10;   // Left padding
+      int rx  = 265;  // Right boundary (proven safe)
+      int rh  = 26;   // Row height (compact)
+      int bh  = 22;   // Button height
+      int y   = 8;    // Starting Y
+      int lbl = 95;   // Label column width (lx to lx+lbl-1 = edits start at lx+lbl+3)
+      int ex  = lx + lbl + 3; // Edit/widget X start = 108
 
-      // --- Row 1: Symbol + AutoSnD status ---
-      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol, lx, y, lx+60, y+16)) return false;
-      string sndStat = InpEnableAutoSnD ? "[AUTO: ON]" : "[AUTO: OFF]";
-      if(!MkLabel(m_lbl_spread, "LSpread", sndStat, lx+65, y, re, y+16)) return false;
+      // Row 1: Symbol + AutoSnD Status
+      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+55, y+16)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO: ON" : "AUTO: OFF", lx+60, y, rx, y+16)) return false;
       y += 20;
 
-      // --- Row 2: Balance ---
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, re, y+16)) return false;
+      // Row 2: Balance
+      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+16)) return false;
       y += 20;
 
-      // --- Separator 1 ---
-      if(!MkLabel(m_lbl_atr, "Sep1", "-----------------------------", lx, y, re, y+12)) return false;
+      // Separator 1
+      if(!MkLabel(m_lbl_atr, "Sep1", "- - - - - - - - - - - - - - - - - - -", lx, y, rx, y+12)) return false;
       y += 14;
 
-      // --- Row 3: Risk + Mode toggle ---
-      // risk edit: ex to ex+100=193, mode btn: 197 to 263 (66px)
-      if(!MkLabel(m_lbl_risk, "LR", "Risk:", lx, y, ex-2, y+16)) return false;
-      if(!MkEdit(m_edt_risk,  "ER", "1.0",   ex, y, 193,  y+16)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", 197, y, re, y+16)) return false;
+      // Row 3: Risk + Mode button
+      if(!MkLabel(m_lbl_risk, "LR", "Risk:",    lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, 195,  y+16)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", 199, y, rx, y+16)) return false;
       y += rh;
 
-      // --- Row 4: Entry Price ---
-      if(!MkLabel(m_lbl_entry, "LE", "Entry:",     lx, y, ex-2, y+16)) return false;
-      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, re,   y+16)) return false;
+      // Row 4: Entry Price
+      if(!MkLabel(m_lbl_entry, "LE", "Entry:",    lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, rx,   y+16)) return false;
       y += rh;
 
-      // --- Row 5: Stop Loss ---
-      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-2, y+16)) return false;
-      if(!MkEdit(m_edt_sl,  "ES", "",            ex, y, re,   y+16)) return false;
+      // Row 5: Stop Loss
+      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-3, y+16)) return false;
+      if(!MkEdit(m_edt_sl,  "ES", "",             ex, y, rx,   y+16)) return false;
       y += rh;
 
-      // --- Row 6: RR Ratio ---
-      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-2, y+16)) return false;
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, re, y+16)) return false;
+      // Row 6: RR Ratio
+      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-3, y+16)) return false;
+      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+16)) return false;
       if(!Add(m_cbx_ratio)) return false;
       m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15);
-      m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30);
+      m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3",  30);
       m_cbx_ratio.Select(2);
       y += rh;
 
-      // --- Row 7: Lot Size ---
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, re, y+16)) return false;
+      // Row 7: Lot Size
+      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, rx, y+16)) return false;
       y += 20;
 
-      // --- Separator 2 ---
-      if(!MkLabel(m_lbl_footer, "Sep2", "-----------------------------", lx, y, re, y+12)) return false;
+      // Separator 2
+      if(!MkLabel(m_lbl_footer, "Sep2", "- - - - - - - - - - - - - - - - - - -", lx, y, rx, y+12)) return false;
       y += 14;
 
-      // --- Row 8: Limit Order Buttons (3 columns) ---
-      // Total width available: re-lx = 255px. bw3=82, gaps=4 each
-      int bw3 = 82;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF", lx,       y, lx+bw3,     y+bh)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "LIMIT",   lx+bw3+4, y, lx+bw3*2+4, y+bh)) return false;
+      // Row 8: Limit Order Buttons (3 cols, total width = rx-lx = 255, bw=82, gap=4)
+      int bw = 82;
+      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF", lx,         y, lx+bw,       y+bh)) return false;
+      if(!MkButton(m_btn_place,   "BP",  "LIMIT",   lx+bw+3,    y, lx+bw*2+3,   y+bh)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL", lx+bw3*2+8, y, re, y+bh)) return false;
+      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",  lx+bw*2+6,  y, rx,           y+bh)) return false;
       y += bh + 5;
 
-      // --- Row 9: Market Order Buttons (2 columns) ---
-      // BUY MKT: lx to ~133 | SELL MKT: 137 to re=263
-      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY  MKT",  lx,  y, 133, y+bh)) return false;
-      m_btn_buy_mkt.ColorBackground(C'0,128,80'); m_btn_buy_mkt.Color(clrWhite);
-      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", 137,  y, re,  y+bh)) return false;
+      // Row 9: Market Order Buttons (2 cols)
+      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY  MKT",  lx,  y, 134, y+bh)) return false;
+      m_btn_buy_mkt.ColorBackground(C'0,130,80'); m_btn_buy_mkt.Color(clrWhite);
+      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", 138,  y, rx,  y+bh)) return false;
       m_btn_sell_mkt.ColorBackground(C'176,0,32'); m_btn_sell_mkt.Color(clrWhite);
       y += bh + 8;
 
-      // --- Row 10: Status ---
-      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, re, y+16)) return false;
+      // Row 10: Status
+      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+16)) return false;
       return true;
    }
    virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
@@ -978,7 +971,8 @@ bool g_resync_done = false;
 
 int OnInit()
   {
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 430)) return INIT_FAILED;
+   // Panel height calculated: ~330px of content + frame => 390px total
+   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 390)) return INIT_FAILED;
    ExtPanel.Run();
    
    ScanHistory(); // Scan full history using SnD_Zone logic
