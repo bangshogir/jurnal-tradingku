@@ -197,6 +197,7 @@ public:
    CEdit     m_edt_risk, m_edt_entry, m_edt_sl;
    CComboBox m_cbx_ratio;
    CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
+   CButton   m_btn_buy_mkt, m_btn_sell_mkt;
    bool      m_cl_active;
    bool      m_risk_in_percent;
 
@@ -274,6 +275,39 @@ public:
       }
       SetStatus(result ? "Order Manual Dipasang" : "Gagal Pasang Order");
    }
+   
+   void      OnBuyMarket() { ExecuteMarketOrder(true); }
+   void      OnSellMarket() { ExecuteMarketOrder(false); }
+   
+   void      ExecuteMarketOrder(bool is_buy) {
+      double risk = StringToDouble(m_edt_risk.Text()); double sl = StringToDouble(m_edt_sl.Text());
+      if(risk <= 0 || sl <= 0) { SetStatus("Isi Risk & SL"); return; }
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double entry = is_buy ? ask : bid;
+      if(is_buy && sl >= entry) { SetStatus("SL Buy harus < Harga"); return; }
+      if(!is_buy && sl <= entry) { SetStatus("SL Sell harus > Harga"); return; }
+      
+      int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+      entry = NormalizeDouble(entry, digits); sl = NormalizeDouble(sl, digits);
+      if(!ValidStopLevel(entry, sl, is_buy)) return;
+      
+      double lot = CalcLotSize(AdjRisk(), entry, sl, _Symbol);
+      if(lot <= 0) return;
+      double diff = MathAbs(entry - sl);
+      long val = m_cbx_ratio.Value(); if(val == 0) val = 10;
+      double mult = val / 10.0;
+      double tp = is_buy ? NormalizeDouble(entry + diff * mult, digits) : NormalizeDouble(entry - diff * mult, digits);
+      bool result = false;
+      string comm = m_cl_active ? ("RP_CL_" + DoubleToString(sl, digits)) : "RP_MKT";
+      double hard_sl = sl;
+      if (m_cl_active) hard_sl = is_buy ? NormalizeDouble(entry - diff * 2.0, digits) : NormalizeDouble(entry + diff * 2.0, digits);
+      
+      if(is_buy) result = ExtTrade.Buy(lot, _Symbol, entry, hard_sl, tp, comm);
+      else result = ExtTrade.Sell(lot, _Symbol, entry, hard_sl, tp, comm);
+      
+      SetStatus(result ? ("Order " + (is_buy?"BUY":"SELL") + " MKT Dipasang") : "Gagal Pasang Order");
+   }
 
    void      OnInput() { UpdateLot(); }
    void      UpdateStats() { m_lbl_pair.Text(_Symbol); UpdateBalance(); }
@@ -300,9 +334,16 @@ public:
       m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15); m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30); m_cbx_ratio.Select(2); y += rh;
       if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", 15, y, 260, y + 20)) return false; y += rh;
       if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",      10, y,  85, y + 25)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "PLACE ORDER",  90, y, 185, y + 25)) return false;
+      if(!MkButton(m_btn_place,   "BP",  "PLACE LIMIT",  90, y, 185, y + 25)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",      190, y, 265, y + 25)) return false; y += 35;
+      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",      190, y, 265, y + 25)) return false; y += 30;
+      
+      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY MKT",     10, y, 135, y + 25)) return false;
+      m_btn_buy_mkt.ColorBackground(C'30,144,255'); m_btn_buy_mkt.Color(clrWhite);
+      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT",   140, y, 265, y + 25)) return false;
+      m_btn_sell_mkt.ColorBackground(clrCrimson); m_btn_sell_mkt.Color(clrWhite);
+      y += 35;
+      
       if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", 15, y, 260, y + 30)) return false;
       return true;
    }
@@ -312,6 +353,8 @@ public:
          if(lp == m_btn_cancel.Id())  { OnCancelBtn(); return true; }
          if(lp == m_btn_cutloss.Id()) { OnCutLoss();   return true; }
          if(lp == m_btn_risk_mode.Id()){ OnRiskModeToggle(); return true; }
+         if(lp == m_btn_buy_mkt.Id()) { OnBuyMarket(); return true; }
+         if(lp == m_btn_sell_mkt.Id()) { OnSellMarket(); return true; }
       }
       if(id == CHARTEVENT_CUSTOM + ON_END_EDIT) { if(lp == m_edt_risk.Id() || lp == m_edt_entry.Id() || lp == m_edt_sl.Id()) { OnInput(); return true; } }
       return CAppDialog::OnEvent(id, lp, dp, sp);
@@ -885,7 +928,7 @@ bool g_resync_done = false;
 
 int OnInit()
   {
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 420)) return INIT_FAILED;
+   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 455)) return INIT_FAILED;
    ExtPanel.Run();
    
    ScanHistory(); // Scan full history using SnD_Zone logic
