@@ -356,7 +356,7 @@ public:
 
       // Row 6: RR Ratio
       if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-3, y+16)) { Print("[DEBUG] FAIL: LRatio"); return false; }
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+16)) { Print("[DEBUG] FAIL: CbRatio"); return false; }
+      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+20)) { Print("[DEBUG] FAIL: CbRatio"); return false; }
       if(!Add(m_cbx_ratio)) { Print("[DEBUG] FAIL: Add CbRatio"); return false; }
       m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15);
       m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3",  30);
