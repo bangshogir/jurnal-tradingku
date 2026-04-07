@@ -315,36 +315,81 @@ public:
    CRiskPanel() { m_cl_active = false; m_risk_in_percent = true; }
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
-      int y = 10, rh = 30;
-      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,          5, y, 75,  y + 20)) return false;
-      if(!MkLabel(m_lbl_spread, "LSpread", "SND AUTO: " + (InpEnableAutoSnD ? "ON" : "OFF"), 85, y, 270, y + 20)) return false;
+
+      // Layout constants
+      int px = 8;          // Padding kiri-kanan
+      int pw = 252;        // Panel inner width (260 - 2*px = 244, adjusted)
+      int y  = 6;          // Starting Y
+      int rh = 24;         // Row height (compact)
+      int lw = 85;         // Lebar kolom label
+      int ew = 140;        // Lebar kolom edit/combo
+      int bh = 22;         // Tinggi tombol
+      int lx = px;         // X mulai label
+      int ex = px + lw + 4;// X mulai edit
+      int rx = ex + ew + 4;// X mulai tombol kecil (mode)
+
+      // --- Row: Symbol + Status AutoSnD ---
+      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,          lx, y, lx+55, y+16)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", (InpEnableAutoSnD ? "● AUTO ON" : "● AUTO OFF"), lx+60, y, lx+230, y+16)) return false;
+      y += 20;
+
+      // --- Row: Balance ---
+      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, lx+230, y+16)) return false;
       y += rh;
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --",        15, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_risk,    "LR",  "Risk (%):", 15, y, 90, y + 20)) return false;
-      if(!MkEdit(m_edt_risk,     "ER",  "1.0",               95, y, 180, y + 20)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       190, y, 260, y + 20)) return false;
+
+      // --- Separator ---
+      if(!MkLabel(m_lbl_atr, "Sep1", "────────────────────────────", lx, y, lx+230, y+12)) return false;
+      y += 14;
+
+      // --- Row: Risk ---
+      if(!MkLabel(m_lbl_risk, "LR", "Risk:", lx, y, lx+lw, y+16)) return false;
+      if(!MkEdit(m_edt_risk,  "ER", "1.0",   ex, y, ex+ew, y+16)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %", rx, y, rx+52, y+16)) return false;
       y += rh;
-      if(!MkLabel(m_lbl_entry,   "LE",  "Entry Price:",        15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_entry,    "EE",  "",                  110, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_sl,      "LS",  "Stop Loss:",          15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_sl,       "ES",  "",                  110, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_ratio,   "LRt", "Risk Ratio:",         15, y, 105, y + 20)) return false;
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, 110, y, 260, y + 20)) return false;
+
+      // --- Row: Entry Price ---
+      if(!MkLabel(m_lbl_entry, "LE", "Entry:", lx, y, lx+lw, y+16)) return false;
+      if(!MkEdit(m_edt_entry,  "EE", "",        ex, y, ex+ew+56, y+16)) return false;
+      y += rh;
+
+      // --- Row: Stop Loss ---
+      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, lx+lw, y+16)) return false;
+      if(!MkEdit(m_edt_sl,  "ES", "",            ex, y, ex+ew+56, y+16)) return false;
+      y += rh;
+
+      // --- Row: Risk Ratio ---
+      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, lx+lw, y+16)) return false;
+      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, ex+ew+56, y+16)) return false;
       if(!Add(m_cbx_ratio)) return false;
-      m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15); m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30); m_cbx_ratio.Select(2); y += rh;
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", 15, y, 260, y + 20)) return false; y += rh;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",      10, y,  85, y + 25)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "PLACE LIMIT",  90, y, 185, y + 25)) return false;
+      m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15); m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30); m_cbx_ratio.Select(2);
+      y += rh;
+
+      // --- Row: Lot Size ---
+      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, lx+230, y+16)) return false;
+      y += 20;
+
+      // --- Separator ---
+      if(!MkLabel(m_lbl_footer, "Sep2", "────────────────────────────", lx, y, lx+230, y+12)) return false;
+      y += 14;
+
+      // --- Row: Limit Order Buttons ---
+      int bw3 = 73;  // Lebar tombol 3 kolom
+      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",   lx,          y, lx+bw3,       y+bh)) return false;
+      if(!MkButton(m_btn_place,   "BP",  "LIMIT",      lx+bw3+4,   y, lx+bw3*2+4,   y+bh)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",      190, y, 265, y + 25)) return false; y += 30;
-      
-      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY MKT",     10, y, 135, y + 25)) return false;
-      m_btn_buy_mkt.ColorBackground(C'30,144,255'); m_btn_buy_mkt.Color(clrWhite);
-      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT",   140, y, 265, y + 25)) return false;
-      m_btn_sell_mkt.ColorBackground(clrCrimson); m_btn_sell_mkt.Color(clrWhite);
-      y += 35;
-      
-      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", 15, y, 260, y + 30)) return false;
+      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",     lx+bw3*2+8, y, lx+bw3*3+8,   y+bh)) return false;
+      y += bh + 6;
+
+      // --- Row: Market Order Buttons ---
+      int bwh = (bw3*3+8) / 2;  // Setengah lebar total = ~112
+      if(!MkButton(m_btn_buy_mkt,  "BBM", "▲ BUY  MKT",  lx,          y, lx+bwh,       y+bh)) return false;
+      m_btn_buy_mkt.ColorBackground(C'0,128,96'); m_btn_buy_mkt.Color(clrWhite);
+      if(!MkButton(m_btn_sell_mkt, "BSM", "▼ SELL MKT",  lx+bwh+4,   y, lx+bw3*3+8,   y+bh)) return false;
+      m_btn_sell_mkt.ColorBackground(C'176,0,32'); m_btn_sell_mkt.Color(clrWhite);
+      y += bh + 8;
+
+      // --- Status ---
+      if(!MkLabel(m_lbl_status, "LSt", "⬤ AutoSnD Ready", lx, y, lx+230, y+16)) return false;
       return true;
    }
    virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
@@ -928,7 +973,7 @@ bool g_resync_done = false;
 
 int OnInit()
   {
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 455)) return INIT_FAILED;
+   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 295, 430)) return INIT_FAILED;
    ExtPanel.Run();
    
    ScanHistory(); // Scan full history using SnD_Zone logic
