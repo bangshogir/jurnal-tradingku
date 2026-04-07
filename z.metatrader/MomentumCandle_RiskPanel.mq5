@@ -32,8 +32,10 @@ input double InpWickPercentage           = 0.10;       // Max opposite wick rati
 input int    InpATRPeriod                = 14;         // Periode ATR
 input double InpATRMultiplier            = 1.5;        // Min candle size vs ATR
 input double InpFibRetracement           = 0.236;      // Entry pullback level (23.6%)
-input double InpFibExtension             = 0.27;       // TP extension level (27%)
-input double InpSLBuffer                 = 30.0;       // Buffer SL (points)
+input double InpFibExtension             = 0.27;       // (Limit) TP extension level (27%)
+input double InpSLBuffer                 = 30.0;       // (Limit) Buffer SL (points)
+input double InpInstantSLRatio           = 1.0;        // (Instant) SL Distance Ratio (100%)
+input double InpInstantTPRatio           = 0.38;       // (Instant) TP Distance Ratio (38%)
 input double InpRiskPerTrade             = 1.0;        // Risk per trade (%)
 input int    InpHistoryBars              = 600;        // Historikal Bars Discan (Panah)
 
@@ -606,8 +608,15 @@ void PlaceMomentumOrder(bool isBullish, int index = 1) {
       else
          entryPrice = NormalizeDouble(SymbolInfoDouble(_Symbol, SYMBOL_ASK), digits);
          
-      double slPrice    = NormalizeDouble(low - (InpSLBuffer * pt), digits);
-      double tpPrice    = NormalizeDouble(high + (range * InpFibExtension), digits);
+      double slPrice = 0.0;
+      double tpPrice = 0.0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK) {
+         slPrice = NormalizeDouble(low - (InpSLBuffer * pt), digits);
+         tpPrice = NormalizeDouble(high + (range * InpFibExtension), digits);
+      } else {
+         slPrice = NormalizeDouble(entryPrice - (range * InpInstantSLRatio), digits);
+         tpPrice = NormalizeDouble(entryPrice + (range * InpInstantTPRatio), digits);
+      }
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, _Symbol);
       if(lot > 0) {
@@ -636,8 +645,15 @@ void PlaceMomentumOrder(bool isBullish, int index = 1) {
       else
          entryPrice = NormalizeDouble(SymbolInfoDouble(_Symbol, SYMBOL_BID), digits);
          
-      double slPrice    = NormalizeDouble(high + (InpSLBuffer * pt), digits);
-      double tpPrice    = NormalizeDouble(low - (range * InpFibExtension), digits);
+      double slPrice = 0.0;
+      double tpPrice = 0.0;
+      if(InpEntryMode == ENTRY_LIMIT_PULLBACK) {
+         slPrice = NormalizeDouble(high + (InpSLBuffer * pt), digits);
+         tpPrice = NormalizeDouble(low - (range * InpFibExtension), digits);
+      } else {
+         slPrice = NormalizeDouble(entryPrice + (range * InpInstantSLRatio), digits);
+         tpPrice = NormalizeDouble(entryPrice - (range * InpInstantTPRatio), digits);
+      }
       
       double lot = CalcLotSize(riskAmount, entryPrice, slPrice, _Symbol);
       if(lot > 0) {
