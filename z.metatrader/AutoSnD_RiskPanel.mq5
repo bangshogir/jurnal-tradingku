@@ -43,6 +43,12 @@ input color  InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 
+input group "=== Momentum Indicator ==="
+input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
+input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
+input int    InpATRPeriod      = 14;         // Periode ATR
+input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
+
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
@@ -86,6 +92,8 @@ bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Be
 int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
 int      g_pending_bear_zone_idx = -1; // Exact zone index created by latest Bear BOS
 bool     g_is_scanning_history = false; // Prevents auto trades from firing during history scan
+
+int      g_atr_handle = INVALID_HANDLE; // Handle untuk indikator ATR
 
 // Array to prevent duplicate pending orders on the same zone
 datetime g_traded_zones[];
@@ -963,6 +971,94 @@ void DeleteAllSnDObjects()
      { string n=ObjectName(0,i); if(StringFind(n,"SnD_")==0) ObjectDelete(0,n); }
   }
 
+//=====================================================================
+// [6.1] MOMENTUM INDICATOR & DETECTOR
+//=====================================================================
+void DrawMomentumArrow(bool isBullish, int index) {
+   double high = iHigh(_Symbol, _Period, index);
+   double low  = iLow(_Symbol, _Period, index);
+   double range = high - low;
+   string objName = (isBullish ? "MomUp_" : "MomDn_") + TimeToString(iTime(_Symbol, _Period, index));
+   if(ObjectFind(0, objName) >= 0) return; // Prevent duplicate
+   
+   if(isBullish) {
+      ObjectCreate(0, objName, OBJ_ARROW_UP, 0, iTime(_Symbol, _Period, index), low - (range * 0.2));
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrDodgerBlue);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_BACK, true);
+      ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bullish Momentum Candle");
+   } else {
+      ObjectCreate(0, objName, OBJ_ARROW_DOWN, 0, iTime(_Symbol, _Period, index), high + (range * 0.2));
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrCrimson);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_BACK, true);
+      ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bearish Momentum Candle");
+   }
+}
+
+bool IsBullishMomentum(int index = 1) {
+   double atr[];
+   if(CopyBuffer(g_atr_handle, 0, index, 1, atr) <= 0) return false;
+   
+   double high = iHigh(_Symbol, _Period, index);
+   double low  = iLow(_Symbol, _Period, index);
+   double open = iOpen(_Symbol, _Period, index);
+   double close= iClose(_Symbol, _Period, index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   
+   // 1. ATR Filter
+   if(totalLength <= atr[0] * InpATRMultiplier) return false;
+   
+   // 2. Dominant Body
+   if(close <= open) return false; // Not bullish
+   double bodyLength = close - open;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   // 3. Minimal Lower Wick (opposite wick)
+   double lowerWick = open - low;
+   if(lowerWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+bool IsBearishMomentum(int index = 1) {
+   double atr[];
+   if(CopyBuffer(g_atr_handle, 0, index, 1, atr) <= 0) return false;
+   
+   double high = iHigh(_Symbol, _Period, index);
+   double low  = iLow(_Symbol, _Period, index);
+   double open = iOpen(_Symbol, _Period, index);
+   double close= iClose(_Symbol, _Period, index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   
+   // 1. ATR Filter
+   if(totalLength <= atr[0] * InpATRMultiplier) return false;
+   
+   // 2. Dominant Body
+   if(open <= close) return false; // Not bearish
+   double bodyLength = open - close;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   // 3. Minimal Upper Wick (opposite wick)
+   double upperWick = high - open;
+   if(upperWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+void ScanHistoricalMomentum() {
+   int total = iBars(_Symbol, _Period);
+   int start = MathMin(InpHistoryBars, total - 2);
+   for(int i = start; i >= 1; i--) {
+      if(IsBullishMomentum(i)) DrawMomentumArrow(true, i);
+      else if(IsBearishMomentum(i)) DrawMomentumArrow(false, i);
+   }
+}
+
 
 //=====================================================================
 // [7] EVENT HANDLERS
@@ -975,7 +1071,12 @@ int OnInit()
    if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 390)) return INIT_FAILED;
    ExtPanel.Run();
    
+   g_atr_handle = iATR(_Symbol, _Period, InpATRPeriod);
+   if(g_atr_handle == INVALID_HANDLE) { Print("Gagal inisialisasi ATR untuk Momentum"); return INIT_FAILED; }
+   
    ScanHistory(); // Scan full history using SnD_Zone logic
+   ScanHistoricalMomentum(); // Scan Momentum indicators
+   
    g_last_processed_bar = iTime(_Symbol, _Period, 0);
    
    Print("AutoSnD EA v3.00 Ready. Trading: ", (InpEnableAutoSnD?"ON":"OFF"));
@@ -985,6 +1086,10 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    DeleteAllSnDObjects();
+   for(int i=ObjectsTotal(0)-1;i>=0;i--) {
+      string n=ObjectName(0,i);
+      if(StringFind(n,"MomUp_")==0 || StringFind(n,"MomDn_")==0) ObjectDelete(0,n);
+   }
    ExtPanel.Destroy(reason);
   }
 
@@ -1003,6 +1108,10 @@ void OnTick()
    if(currentBarTime != g_last_processed_bar)
      {
       ProcessBar(1); // Proses lilin 1 (baru tertutup)
+      
+      if(IsBullishMomentum(1)) DrawMomentumArrow(true, 1);
+      else if(IsBearishMomentum(1)) DrawMomentumArrow(false, 1);
+      
       g_last_processed_bar = currentBarTime;
      }
   }
