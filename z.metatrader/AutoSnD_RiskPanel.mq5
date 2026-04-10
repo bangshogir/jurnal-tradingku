@@ -51,7 +51,6 @@ input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
-
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
@@ -215,7 +214,7 @@ class CRiskPanel : public CAppDialog
 public:
    CLabel    m_lbl_balance, m_lbl_risk, m_lbl_entry, m_lbl_sl;
    CLabel    m_lbl_ratio,   m_lbl_lot,  m_lbl_status;
-   CLabel    m_lbl_pair, m_lbl_spread, m_lbl_atr, m_lbl_footer;
+   CLabel    m_lbl_pair, m_lbl_spread, m_lbl_atr, m_lbl_footer, m_lbl_clock;
    CEdit     m_edt_risk, m_edt_entry, m_edt_sl, m_edt_ratio;
    CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
    CButton   m_btn_buy_mkt, m_btn_sell_mkt, m_btn_close_all;
@@ -249,6 +248,13 @@ public:
       if(r <= 0 || e <= 0 || s <= 0 || e == s) { m_lbl_lot.Text("Lot Size: --"); return; }
       double lot = CalcLotSize(AdjRisk(), e, s, _Symbol);
       m_lbl_lot.Text(lot > 0 ? "Lot Size: " + DoubleToString(lot, 2) : "Lot Size: --");
+   }
+   
+   void      UpdateClock(datetime barTime) {
+      MqlDateTime loc; TimeToStruct(TimeLocal(), loc);
+      int sec_left = (int)(barTime + PeriodSeconds(_Period) - TimeCurrent());
+      if(sec_left < 0) sec_left = 0;
+      m_lbl_clock.Text(StringFormat("LOC %02d:%02d | BAR %02d:%02d", loc.hour, loc.min, sec_left/60, sec_left%60));
    }
    
    bool      ValidStopLevel(double entry, double sl, bool is_buy) {
@@ -364,7 +370,7 @@ public:
       y += ch + 5;
 
       // Row 2: Balance
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+ch, 8)) return false;
+      if(!MkLabel(m_lbl_balance, "Bal",  "Balance: --", lx, y, rx, y+ch, 8)) return false;
       y += ch + 15;
 
       // Row 3: Risk
@@ -419,6 +425,12 @@ public:
 
       // Status
       if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+ch)) return false;
+      y += ch + 5;
+      
+      // Clock
+      if(!MkLabel(m_lbl_clock, "LClk", "LOC --:-- | BAR --:--", lx, y, rx, y+ch, 8)) return false;
+      m_lbl_clock.Color(clrDodgerBlue);
+      
       return true;
    }
    virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
@@ -1131,8 +1143,8 @@ bool g_resync_done = false;
 
 int OnInit()
   {
-   // Panel height increased to accommodate new padded rows (total 490px)
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 490)) return INIT_FAILED;
+   // Panel height increased to accommodate new padded rows (total 520px)
+   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 520)) return INIT_FAILED;
    ExtPanel.Run();
    
    g_atr_handle = iATR(_Symbol, _Period, InpATRPeriod);
@@ -1182,6 +1194,9 @@ void OnTick()
       g_last_processed_bar = currentBarTime;
      }
 
+   // Update jam digital di panel setiap tick
+   ExtPanel.UpdateClock(currentBarTime);
+   
    // --- Early Momentum Signal (Realtime check di shift 0) ---
    if(InpEarlySignalSeconds > 0)
      {
