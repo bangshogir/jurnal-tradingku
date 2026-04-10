@@ -14,862 +14,783 @@
 #include <Controls\Button.mqh>
 #include <Controls\ComboBox.mqh>
 
-// MT4 CTrade Equivalent Helper
+//=====================================================================
+// MT4 CTrade Wrapper
+//=====================================================================
 class CTradeMT4 {
 public:
-   bool BuyLimit(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
+   bool Buy(double vol,string sym,double price,double sl,double tp,string comment){
       RefreshRates();
-      int tk = OrderSend(sym, OP_BUYLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrBlue);
-      return tk > 0;
+      int tk=OrderSend(sym,OP_BUY,vol,Ask,10,sl,tp,comment,0,0,clrBlue);
+      return tk>0;
    }
-   bool SellLimit(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
+   bool Sell(double vol,string sym,double price,double sl,double tp,string comment){
       RefreshRates();
-      int tk = OrderSend(sym, OP_SELLLIMIT, vol, price, 10, sl, tp, comment, 0, expr, clrRed);
-      return tk > 0;
+      int tk=OrderSend(sym,OP_SELL,vol,Bid,10,sl,tp,comment,0,0,clrRed);
+      return tk>0;
    }
-   bool BuyStop(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
+   bool BuyLimit(double vol,double price,string sym,double sl,double tp,int tt,datetime expr,string comment){
       RefreshRates();
-      int tk = OrderSend(sym, OP_BUYSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrBlue);
-      return tk > 0;
+      int tk=OrderSend(sym,OP_BUYLIMIT,vol,price,10,sl,tp,comment,0,expr,clrBlue);
+      return tk>0;
    }
-   bool SellStop(double vol, double price, string sym, double sl, double tp, int type_time, datetime expr, string comment) {
+   bool SellLimit(double vol,double price,string sym,double sl,double tp,int tt,datetime expr,string comment){
       RefreshRates();
-      int tk = OrderSend(sym, OP_SELLSTOP, vol, price, 10, sl, tp, comment, 0, expr, clrRed);
-      return tk > 0;
+      int tk=OrderSend(sym,OP_SELLLIMIT,vol,price,10,sl,tp,comment,0,expr,clrRed);
+      return tk>0;
    }
-   bool PositionClose(int ticket, int slippage=10) {
-      if(OrderSelect(ticket, SELECT_BY_TICKET, MODE_TRADES)) {
+   bool BuyStop(double vol,double price,string sym,double sl,double tp,int tt,datetime expr,string comment){
+      RefreshRates();
+      int tk=OrderSend(sym,OP_BUYSTOP,vol,price,10,sl,tp,comment,0,expr,clrBlue);
+      return tk>0;
+   }
+   bool SellStop(double vol,double price,string sym,double sl,double tp,int tt,datetime expr,string comment){
+      RefreshRates();
+      int tk=OrderSend(sym,OP_SELLSTOP,vol,price,10,sl,tp,comment,0,expr,clrRed);
+      return tk>0;
+   }
+   bool PositionClose(int ticket,int slippage=10){
+      if(OrderSelect(ticket,SELECT_BY_TICKET,MODE_TRADES)){
          RefreshRates();
-         if(OrderType() == OP_BUY) return OrderClose(ticket, OrderLots(), MarketInfo(OrderSymbol(), MODE_BID), slippage, clrWhite);
-         if(OrderType() == OP_SELL) return OrderClose(ticket, OrderLots(), MarketInfo(OrderSymbol(), MODE_ASK), slippage, clrWhite);
+         if(OrderType()==OP_BUY)  return OrderClose(ticket,OrderLots(),MarketInfo(OrderSymbol(),MODE_BID),slippage,clrWhite);
+         if(OrderType()==OP_SELL) return OrderClose(ticket,OrderLots(),MarketInfo(OrderSymbol(),MODE_ASK),slippage,clrWhite);
       }
       return false;
    }
-   bool OrderDelete(int ticket) {
-      if(OrderSelect(ticket, SELECT_BY_TICKET, MODE_TRADES)) {
-         if(OrderType() > OP_SELL) return ::OrderDelete(ticket, clrWhite);
-      }
+   bool OrderDelete(int ticket){
+      if(OrderSelect(ticket,SELECT_BY_TICKET,MODE_TRADES))
+         if(OrderType()>OP_SELL) return ::OrderDelete(ticket,clrWhite);
       return false;
    }
 };
-
 CTradeMT4 ExtTrade;
 
 //=====================================================================
 // [1] INPUT PARAMETERS
 //=====================================================================
-input string  _sec1_ = "=== Risk Panel & Webhook ===";
-input string  InpWebhookURL = "http://jurnaltradingku.my.id/api/webhook/trading-log"; // Webhook URL
-input string  InpWebhookToken = "";                                                   // Webhook API Token
-input int     InpResyncDays = 365;                                                    // Auto Resync History (Days)
+input string  _s1_="=== Risk Panel & Webhook ===";
+input string  InpWebhookURL   = "http://jurnaltradingku.my.id/api/webhook/trading-log";
+input string  InpWebhookToken = "";
+input int     InpResyncDays   = 365;
 
-input string  _sec2_ = "=== Auto Close Friday ===";
-input bool    InpEnableAutoCloseFriday = false; // Enable Auto Close Friday
-input int     InpAutoCloseMinutesBefore = 15;   // Minutes before market close
+input string  _s2_="=== Auto Close Friday ===";
+input bool    InpEnableAutoCloseFriday  = false;
+input int     InpAutoCloseMinutesBefore = 15;
 
-input string  _sec3_ = "=== Auto SnD Trading Logic ===";
-input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
-input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
-input int     InpOriginLookback = 50;    // Traceback max candle base
-input double  InpBufferPoints   = 20.0;  // Jarak Buffer SL (Points)
-input int     InpHistoryBars    = 600;   // Jumlah Bar Histori Discan
-input bool    InpShowBOS        = true;  // Tampilkan Garis BOS di Chart
-input color   InpDemandColor    = C'0,160,0';   // Warna Zona Demand
-input color   InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
-input bool    InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
-input color   InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
-input color   InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
-input color   InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
+input string  _s3_="=== Auto SnD Trading Logic ===";
+input bool    InpEnableAutoSnD   = false;
+input int     InpPivotLB         = 5;
+input int     InpOriginLookback  = 50;
+input double  InpBufferPoints    = 20.0;
+input int     InpHistoryBars     = 600;
+input bool    InpShowBOS         = true;
+input color   InpDemandColor     = C'0,160,0';
+input color   InpSupplyColor     = C'190,0,0';
+input bool    InpShowMitigated   = true;
+input color   InpMitColor        = clrGray;
+input color   InpBOSBull         = clrDodgerBlue;
+input color   InpBOSBear         = clrOrangeRed;
+input color   InpGoldenZoneColor = clrGold;
+
+input string  _s4_="=== Momentum Indicator ===";
+input int     InpEarlySignalSeconds = 10;
+input bool    InpEnableAutoMomentum = false;
+input double  InpBodyPercentage     = 0.75;
+input double  InpWickPercentage     = 0.10;
+input int     InpATRPeriod          = 14;
+input double  InpATRMultiplier      = 1.5;
 
 //=====================================================================
-// ZONE STRUCT & GLOBALS (copied from SnD_Zone)
+// ZONE STRUCT & GLOBALS
 //=====================================================================
-struct ZoneData
-  {
-   string   rect_name;
-   string   lbl_name;
-   string   lbl_top;
-   string   lbl_btm;
+struct ZoneData {
+   string   rect_name, lbl_name, lbl_top, lbl_btm;
    bool     is_demand;
-   double   top;
-   double   btm;
+   double   top, btm;
    datetime start_time;
    bool     active;
-  };
-
-#define MAX_ZONES    300
-
+};
+#define MAX_ZONES 300
 ZoneData g_zones[MAX_ZONES];
-int      g_zone_count   = 0;
-int      g_obj_id       = 0;
-
-double   g_last_ph      = 0;
-datetime g_last_ph_time = 0;
-double   g_last_pl      = 0;
-datetime g_last_pl_time = 0;
-double   g_old_last_ph  = 0;
-double   g_old_last_pl  = 0;
-datetime g_marked_ph_time = 0;
-datetime g_marked_pl_time = 0;
-
-datetime g_last_processed_bar = 0;
-
-// Tracks BOS origin level for Fibo drawing (set when BOS fires)
-double   g_fibo_origin_bullish = 0; // Swing Low origin of Bullish BOS move
-double   g_fibo_origin_bearish = 0; // Swing High origin of Bearish BOS move
-datetime g_fibo_origin_bull_time = 0;
-datetime g_fibo_origin_bear_time = 0;
-bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bull BOS
-bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
-int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
-int      g_pending_bear_zone_idx = -1; // Exact zone index created by latest Bear BOS
-bool     g_is_scanning_history = false; // Prevents auto trades from firing during history scan
-
-// Array to prevent duplicate pending orders on the same zone
+int      g_zone_count=0, g_obj_id=0;
+double   g_last_ph=0, g_last_pl=0;
+datetime g_last_ph_time=0, g_last_pl_time=0;
+double   g_old_last_ph=0, g_old_last_pl=0;
+datetime g_marked_ph_time=0, g_marked_pl_time=0;
+datetime g_last_processed_bar=0;
+double   g_fibo_origin_bullish=0, g_fibo_origin_bearish=0;
+datetime g_fibo_origin_bull_time=0, g_fibo_origin_bear_time=0;
+bool     g_fibo_bull_pending=false, g_fibo_bear_pending=false;
+int      g_pending_bull_zone_idx=-1, g_pending_bear_zone_idx=-1;
+bool     g_is_scanning_history=false;
 datetime g_traded_zones[];
-bool IsZoneTraded(datetime t) { int s=ArraySize(g_traded_zones); for(int i=0;i<s;i++) if(g_traded_zones[i]==t) return true; return false; }
-void MarkZoneTraded(datetime t) { int s=ArraySize(g_traded_zones); ArrayResize(g_traded_zones,s+1); g_traded_zones[s]=t; }
+int      g_active_tickets[];
+int      g_last_history_total=0;
 
-string NextID() { return IntegerToString(++g_obj_id); }
-
-// Global Webhook Event Poller Array
-int g_active_tickets[];
-int g_last_history_total = 0;
+bool IsZoneTraded(datetime t){int s=ArraySize(g_traded_zones);for(int i=0;i<s;i++)if(g_traded_zones[i]==t)return true;return false;}
+void MarkZoneTraded(datetime t){int s=ArraySize(g_traded_zones);ArrayResize(g_traded_zones,s+1);g_traded_zones[s]=t;}
+string NextID(){return IntegerToString(++g_obj_id);}
 
 //=====================================================================
 // [2] LOT CALCULATION
 //=====================================================================
-double CalcLotSize(double risk, double entry, double sl, string symbol)
-  {
-   double diff = MathAbs(entry - sl); if(diff == 0) return 0;
-   double ts   = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
-   double tv   = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
-   double vmin = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-   double vstep= SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
-   double vmax = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
-   if(ts == 0 || tv == 0) return -1;
-   double lot  = risk / ((diff / ts) * tv);
-   double lotn = MathFloor(lot / vstep) * vstep;
-   if(lotn < vmin && lot > 0) return -2;
-   if(lotn > vmax) lotn = vmax;
+double CalcLotSize(double risk,double entry,double sl,string symbol){
+   double diff=MathAbs(entry-sl); if(diff==0) return 0;
+   double ts=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+   double tv=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_VALUE);
+   double vmin=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN);
+   double vstep=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
+   double vmax=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX);
+   if(ts==0||tv==0) return -1;
+   double lot=risk/((diff/ts)*tv);
+   double lotn=MathFloor(lot/vstep)*vstep;
+   if(lotn<vmin&&lot>0) return -2;
+   if(lotn>vmax) lotn=vmax;
    return lotn;
-  }
+}
 
 //=====================================================================
 // [3] CUT LOSS & FRIDAY MONITOR
 //=====================================================================
-void CheckCutLoss()
-  {
-   double cls   = iClose(Symbol(), Period(), 1);
-   int    total = OrdersTotal();
-   for(int i = total - 1; i >= 0; i--)
-     {
-      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
-      if(OrderSymbol() != Symbol() || OrderType() > OP_SELL) continue; // Hanya Posisi Terbuka MT4
-      string comment = OrderComment();
-      if(StringFind(comment, "RP_CL_") != 0 && StringFind(comment, "SND_CL_") != 0) continue;
-      int idx = StringFind(comment, "CL_");
-      double cut  = StringToDouble(StringSubstr(comment, idx + 3));
-      if(cut == 0) continue;
-      bool is_buy = (OrderType() == OP_BUY);
-      bool do_cut = is_buy ? (cls < cut) : (cls > cut);
-      if(do_cut) ExtTrade.PositionClose(OrderTicket(), 10);
-     }
-  }
+void CheckCutLoss(){
+   double bid=MarketInfo(Symbol(),MODE_BID);
+   double ask=MarketInfo(Symbol(),MODE_ASK);
+   int total=OrdersTotal();
+   for(int i=total-1;i>=0;i--){
+      if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+      if(OrderSymbol()!=Symbol()) continue;
+      if(OrderType()>OP_SELL) continue;
+      string comment=OrderComment();
+      if(StringFind(comment,"RP_CL_")<0 && StringFind(comment,"SND_CL_")<0) continue;
+      int idx=StringFind(comment,"CL_"); if(idx<0) continue;
+      double cut=StringToDouble(StringSubstr(comment,idx+3));
+      if(cut==0) continue;
+      bool is_buy=(OrderType()==OP_BUY);
+      bool do_cut=is_buy?(bid<=cut):(ask>=cut);
+      if(do_cut){
+         Print(">>> Cut Loss TRIGGERED! Ticket:",OrderTicket()," Comment:",comment," Cut:",cut);
+         ExtTrade.PositionClose(OrderTicket(),10);
+      }
+   }
+}
 
-void CheckAutoCloseFriday()
-  {
+void CheckAutoCloseFriday(){
    if(!InpEnableAutoCloseFriday) return;
-   
-   if(DayOfWeek() != 5) return; // FRIDAY ONLY
-   
-   // Sederhana: Close sebelum midnight (23:59:59)
-   int current_sec = TimeHour(TimeCurrent())*3600 + TimeMinute(TimeCurrent())*60 + TimeSeconds(TimeCurrent());
-   int trigger_sec = 86399 - (InpAutoCloseMinutesBefore * 60);
-   
-   if(current_sec >= trigger_sec)
-     {
-      bool actionsTaken = false;
-      int ordersTotal = OrdersTotal();
-      for(int i = ordersTotal - 1; i >= 0; i--)
-        {
-         if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
-           {
-            if(OrderSymbol() == Symbol())
-              {
-               if(OrderType() <= OP_SELL) ExtTrade.PositionClose(OrderTicket());
-               else ExtTrade.OrderDelete(OrderTicket());
-               actionsTaken = true;
-              }
-           }
-        }
-      if(actionsTaken) Print("Auto Close Friday triggered at: ", TimeCurrent());
-     }
-  }
+   if(DayOfWeek()!=5) return;
+   int cur_sec=TimeHour(TimeCurrent())*3600+TimeMinute(TimeCurrent())*60+TimeSeconds(TimeCurrent());
+   int trig_sec=86399-(InpAutoCloseMinutesBefore*60);
+   if(cur_sec>=trig_sec){
+      bool done=false;
+      for(int i=OrdersTotal()-1;i>=0;i--){
+         if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+         if(OrderSymbol()!=Symbol()) continue;
+         if(OrderType()<=OP_SELL) ExtTrade.PositionClose(OrderTicket());
+         else ExtTrade.OrderDelete(OrderTicket());
+         done=true;
+      }
+      if(done) Print("Auto Close Friday triggered at:",TimeCurrent());
+   }
+}
 
 //=====================================================================
 // [4] RISK PANEL CLASS
 //=====================================================================
-class CRiskPanel : public CAppDialog
-  {
+class CRiskPanel : public CAppDialog {
 public:
-   CLabel    m_lbl_balance, m_lbl_risk, m_lbl_entry, m_lbl_sl;
-   CLabel    m_lbl_ratio,   m_lbl_lot,  m_lbl_status;
-   CLabel    m_lbl_pair, m_lbl_spread, m_lbl_atr, m_lbl_footer;
-   CEdit     m_edt_risk, m_edt_entry, m_edt_sl;
-   CComboBox m_cbx_ratio;
-   CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
-   bool      m_cl_active;
-   bool      m_risk_in_percent;
+   CLabel  m_lbl_balance,m_lbl_risk,m_lbl_entry,m_lbl_sl;
+   CLabel  m_lbl_ratio,m_lbl_lot,m_lbl_status;
+   CLabel  m_lbl_pair,m_lbl_spread;
+   CEdit   m_edt_risk,m_edt_entry,m_edt_sl,m_edt_ratio;
+   CButton m_btn_place,m_btn_cancel,m_btn_cutloss,m_btn_risk_mode;
+   CButton m_btn_buy_mkt,m_btn_sell_mkt,m_btn_close_all;
+   bool    m_cl_active, m_risk_in_percent;
 
-   bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); return Add(l); }
-   bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); return Add(e); }
-   bool      MkButton(CButton &b, string n, string t, int x1, int y1, int x2, int y2){ if(!b.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; b.Text(t); return Add(b); }
-   void      SetStatus(string t) { m_lbl_status.Text("Status: " + t); }
-   bool      IsCent() { string c = AccountInfoString(ACCOUNT_CURRENCY); return StringFind(c, "USC") >= 0 || StringFind(c, "ent") >= 0; }
-   string    AccCurr() { return IsCent() ? "USD" : AccountInfoString(ACCOUNT_CURRENCY); }
-   
-   double    AdjRisk() { 
-      double r = StringToDouble(m_edt_risk.Text());
-      double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-      double raw_risk_amount = 0;
-      if(m_risk_in_percent) raw_risk_amount = balance * (r / 100.0);
-      else raw_risk_amount = IsCent() ? (r * 100.0) : r;
-      return raw_risk_amount;
+   bool MkLabel(CLabel &l,string n,string t,int x1,int y1,int x2,int y2,int fs=7){
+      if(!l.Create(m_chart_id,m_name+n,m_subwin,x1,y1,x2,y2)) return false;
+      l.Text(t); l.FontSize(fs); return Add(l);
    }
-   
-   void      UpdateBalance() { double b = AccountInfoDouble(ACCOUNT_BALANCE); if(IsCent()) b /= 100.0; m_lbl_balance.Text("Balance: " + AccCurr() + " " + DoubleToString(b, 2)); }
-   void      UpdateLot() { 
-      double r = StringToDouble(m_edt_risk.Text()); double e = StringToDouble(m_edt_entry.Text()); double s = StringToDouble(m_edt_sl.Text());
-      if(r <= 0 || e <= 0 || s <= 0 || e == s) { m_lbl_lot.Text("Lot Size: --"); return; }
-      double lot = CalcLotSize(AdjRisk(), e, s, Symbol());
-      m_lbl_lot.Text(lot > 0 ? "Lot Size: " + DoubleToString(lot, 2) : "Lot Size: --");
+   bool MkEdit(CEdit &e,string n,string t,int x1,int y1,int x2,int y2,int fs=7){
+      if(!e.Create(m_chart_id,m_name+n,m_subwin,x1,y1,x2,y2)) return false;
+      e.Text(t); e.FontSize(fs); return Add(e);
    }
-   
-   bool      ValidStopLevel(double entry, double sl, bool is_buy) {
-      long   pts  = SymbolInfoInteger(Symbol(), SYMBOL_TRADE_STOPS_LEVEL);
-      if(pts == 0) return true;
-      double mind = pts * SymbolInfoDouble(Symbol(), SYMBOL_POINT);
-      if( is_buy && sl >= entry - mind) { SetStatus("SL terlalu dekat! Min: " + IntegerToString((int)pts) + " pts"); return false; }
-      if(!is_buy && sl <= entry + mind) { SetStatus("SL terlalu dekat! Min: " + IntegerToString((int)pts) + " pts"); return false; }
+   bool MkButton(CButton &b,string n,string t,int x1,int y1,int x2,int y2,int fs=7){
+      if(!b.Create(m_chart_id,m_name+n,m_subwin,x1,y1,x2,y2)) return false;
+      b.Text(t); b.FontSize(fs); return Add(b);
+   }
+   void SetStatus(string t){m_lbl_status.Text("Status: "+t);}
+   bool IsCent(){string c=AccountInfoString(ACCOUNT_CURRENCY);return StringFind(c,"USC")>=0||StringFind(c,"ent")>=0;}
+   string AccCurr(){return IsCent()?"USD":AccountInfoString(ACCOUNT_CURRENCY);}
+
+   double AdjRisk(){
+      double r=StringToDouble(m_edt_risk.Text());
+      double balance=AccountInfoDouble(ACCOUNT_BALANCE);
+      if(m_risk_in_percent) return balance*(r/100.0);
+      return IsCent()?(r*100.0):r;
+   }
+   void UpdateBalance(){double b=AccountInfoDouble(ACCOUNT_BALANCE);if(IsCent())b/=100.0;m_lbl_balance.Text("Balance: "+AccCurr()+" "+DoubleToString(b,2));}
+   void UpdateLot(){
+      double r=StringToDouble(m_edt_risk.Text()),e=StringToDouble(m_edt_entry.Text()),s=StringToDouble(m_edt_sl.Text());
+      if(r<=0||e<=0||s<=0||e==s){m_lbl_lot.Text("Lot Size: --");return;}
+      double lot=CalcLotSize(AdjRisk(),e,s,Symbol());
+      m_lbl_lot.Text(lot>0?"Lot Size: "+DoubleToString(lot,2):"Lot Size: --");
+   }
+   bool ValidStopLevel(double entry,double sl,bool is_buy){
+      long pts=SymbolInfoInteger(Symbol(),SYMBOL_TRADE_STOPS_LEVEL);
+      if(pts==0) return true;
+      double mind=pts*SymbolInfoDouble(Symbol(),SYMBOL_POINT);
+      if(is_buy&&sl>=entry-mind){SetStatus("SL terlalu dekat! Min:"+IntegerToString((int)pts)+"pts");return false;}
+      if(!is_buy&&sl<=entry+mind){SetStatus("SL terlalu dekat! Min:"+IntegerToString((int)pts)+"pts");return false;}
       return true;
    }
-
-   void      OnCancelBtn() { m_edt_entry.Text(""); m_edt_sl.Text(""); m_lbl_lot.Text("Lot Size: --"); SetStatus("Dibatalkan."); }
-   void      OnCutLoss() { m_cl_active = !m_cl_active; m_btn_cutloss.Text(m_cl_active ? "CL: ON" : "CL: OFF"); SetStatus(m_cl_active ? "Cut Loss ON" : "Cut Loss OFF"); }
-   
-   void      OnRiskModeToggle() {
-      m_risk_in_percent = !m_risk_in_percent;
-      m_btn_risk_mode.Text(m_risk_in_percent ? "MODE: %" : "MODE: $");
-      m_lbl_risk.Text(m_risk_in_percent ? "Risk (%):" : "Risk ($):");
+   void OnCancelBtn(){m_edt_entry.Text("");m_edt_sl.Text("");m_lbl_lot.Text("Lot Size: --");SetStatus("Dibatalkan.");}
+   void OnCutLoss(){m_cl_active=!m_cl_active;m_btn_cutloss.Text(m_cl_active?"CL: ON":"CL: OFF");SetStatus(m_cl_active?"Cut Loss ON":"Cut Loss OFF");}
+   void OnRiskModeToggle(){
+      m_risk_in_percent=!m_risk_in_percent;
+      m_btn_risk_mode.Text(m_risk_in_percent?" % ":" $ ");
+      m_lbl_risk.Text(m_risk_in_percent?"Risk (%):":"Risk ($):");
       UpdateLot();
    }
-   
-   void      OnPlace() {
-      double risk = StringToDouble(m_edt_risk.Text()); double entry = StringToDouble(m_edt_entry.Text()); double sl = StringToDouble(m_edt_sl.Text());
-      if(risk <= 0 || entry <= 0 || sl <= 0 || entry == sl) return;
-      int digits = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
-      entry = NormalizeDouble(entry, digits); sl = NormalizeDouble(sl, digits);
-      bool is_buy = entry > sl;
-      if(!ValidStopLevel(entry, sl, is_buy)) return;
-      double lot = CalcLotSize(AdjRisk(), entry, sl, Symbol());
-      if(lot <= 0) return;
-      double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK); double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-      double diff = MathAbs(entry - sl);
-      long val = m_cbx_ratio.Value(); if(val == 0) val = 10;
-      double mult = val / 10.0;
-      double tp = 0; bool result = false;
-      if(m_cl_active) {
-         double backup = is_buy ? NormalizeDouble(entry - diff * 2.0, digits) : NormalizeDouble(entry + diff * 2.0, digits);
-         string clc = "RP_CL_" + DoubleToString(sl, digits);
-         if(is_buy) { tp = NormalizeDouble(entry + diff * mult, digits); result = (entry < ask) ? ExtTrade.BuyLimit(lot, entry, Symbol(), backup, tp, 0, 0, clc)  : ExtTrade.BuyStop(lot, entry, Symbol(), backup, tp, 0, 0, clc); }
-         else       { tp = NormalizeDouble(entry - diff * mult, digits); result = (entry > bid) ? ExtTrade.SellLimit(lot, entry, Symbol(), backup, tp, 0, 0, clc) : ExtTrade.SellStop(lot, entry, Symbol(), backup, tp, 0, 0, clc); }
+   void OnPlace(){
+      double risk=StringToDouble(m_edt_risk.Text()),entry=StringToDouble(m_edt_entry.Text()),sl=StringToDouble(m_edt_sl.Text());
+      if(risk<=0||entry<=0||sl<=0||entry==sl) return;
+      int digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
+      entry=NormalizeDouble(entry,digits); sl=NormalizeDouble(sl,digits);
+      bool is_buy=entry>sl;
+      if(!ValidStopLevel(entry,sl,is_buy)) return;
+      double lot=CalcLotSize(AdjRisk(),entry,sl,Symbol());
+      if(lot<=0) return;
+      RefreshRates();
+      double ask=Ask,bid=Bid;
+      double diff=MathAbs(entry-sl);
+      double mult=StringToDouble(m_edt_ratio.Text()); if(mult<=0) mult=2.0;
+      double tp=0; bool result=false;
+      if(m_cl_active){
+         double backup=is_buy?NormalizeDouble(entry-diff*2.0,digits):NormalizeDouble(entry+diff*2.0,digits);
+         string clc="RP_CL_"+DoubleToString(sl,digits);
+         if(is_buy){tp=NormalizeDouble(entry+diff*mult,digits);result=(entry<ask)?ExtTrade.BuyLimit(lot,entry,Symbol(),backup,tp,0,0,clc):ExtTrade.BuyStop(lot,entry,Symbol(),backup,tp,0,0,clc);}
+         else      {tp=NormalizeDouble(entry-diff*mult,digits);result=(entry>bid)?ExtTrade.SellLimit(lot,entry,Symbol(),backup,tp,0,0,clc):ExtTrade.SellStop(lot,entry,Symbol(),backup,tp,0,0,clc);}
       } else {
-         if(is_buy) { tp = NormalizeDouble(entry + diff * mult, digits); result = (entry < ask) ? ExtTrade.BuyLimit(lot, entry, Symbol(), sl, tp, 0, 0, "RP")  : ExtTrade.BuyStop(lot, entry, Symbol(), sl, tp, 0, 0, "RP"); }
-         else       { tp = NormalizeDouble(entry - diff * mult, digits); result = (entry > bid) ? ExtTrade.SellLimit(lot, entry, Symbol(), sl, tp, 0, 0, "RP") : ExtTrade.SellStop(lot, entry, Symbol(), sl, tp, 0, 0, "RP"); }
+         if(is_buy){tp=NormalizeDouble(entry+diff*mult,digits);result=(entry<ask)?ExtTrade.BuyLimit(lot,entry,Symbol(),sl,tp,0,0,"RP"):ExtTrade.BuyStop(lot,entry,Symbol(),sl,tp,0,0,"RP");}
+         else      {tp=NormalizeDouble(entry-diff*mult,digits);result=(entry>bid)?ExtTrade.SellLimit(lot,entry,Symbol(),sl,tp,0,0,"RP"):ExtTrade.SellStop(lot,entry,Symbol(),sl,tp,0,0,"RP");}
       }
-      SetStatus(result ? "Order Manual Dipasang" : "Gagal Pasang Order");
+      SetStatus(result?"Order Manual Dipasang":"Gagal Pasang Order");
    }
+   void OnBuyMarket(){ExecuteMarketOrder(true);}
+   void OnSellMarket(){ExecuteMarketOrder(false);}
+   void OnCloseAll(){
+      int count=0;
+      for(int i=OrdersTotal()-1;i>=0;i--){
+         if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+         if(OrderSymbol()!=Symbol()) continue;
+         if(OrderType()<=OP_SELL){ExtTrade.PositionClose(OrderTicket());count++;}
+         else{ExtTrade.OrderDelete(OrderTicket());count++;}
+      }
+      SetStatus(count>0?"Tertutup "+IntegerToString(count)+" order":"Tidak ada order aktif.");
+   }
+   void ExecuteMarketOrder(bool is_buy){
+      double risk=StringToDouble(m_edt_risk.Text()),sl=StringToDouble(m_edt_sl.Text());
+      if(risk<=0||sl<=0){SetStatus("Isi Risk & SL");return;}
+      RefreshRates();
+      double entry=is_buy?Ask:Bid;
+      if(is_buy&&sl>=entry){SetStatus("SL Buy harus < Harga");return;}
+      if(!is_buy&&sl<=entry){SetStatus("SL Sell harus > Harga");return;}
+      int digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
+      entry=NormalizeDouble(entry,digits); sl=NormalizeDouble(sl,digits);
+      if(!ValidStopLevel(entry,sl,is_buy)) return;
+      double lot=CalcLotSize(AdjRisk(),entry,sl,Symbol());
+      if(lot<=0) return;
+      double diff=MathAbs(entry-sl);
+      double mult=StringToDouble(m_edt_ratio.Text()); if(mult<=0) mult=2.0;
+      double tp=is_buy?NormalizeDouble(entry+diff*mult,digits):NormalizeDouble(entry-diff*mult,digits);
+      string comm=m_cl_active?("RP_CL_"+DoubleToString(sl,digits)):"RP_MKT";
+      double hard_sl=sl;
+      if(m_cl_active) hard_sl=is_buy?NormalizeDouble(entry-diff*2.0,digits):NormalizeDouble(entry+diff*2.0,digits);
+      bool result=is_buy?ExtTrade.Buy(lot,Symbol(),entry,hard_sl,tp,comm):ExtTrade.Sell(lot,Symbol(),entry,hard_sl,tp,comm);
+      SetStatus(result?("Order "+(is_buy?"BUY":"SELL")+" MKT Dipasang"):"Gagal Pasang Order");
+   }
+   void OnInput(){UpdateLot();}
+   void UpdateStats(){m_lbl_pair.Text(Symbol());UpdateBalance();}
 
-   void      OnInput() { UpdateLot(); }
-   void      UpdateStats() { m_lbl_pair.Text(Symbol()); UpdateBalance(); }
-
-   CRiskPanel() { m_cl_active = false; m_risk_in_percent = true; }
-   virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
-      if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
-      int y = 10, rh = 30;
-      if(!MkLabel(m_lbl_pair,   "LPair",   Symbol(),          5, y, 75,  y + 20)) return false;
-      if(!MkLabel(m_lbl_spread, "LSpread", "SND AUTO: " + (InpEnableAutoSnD ? "ON" : "OFF"), 85, y, 270, y + 20)) return false;
-      y += rh;
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --",        15, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_risk,    "LR",  "Risk (%):", 15, y, 90, y + 20)) return false;
-      if(!MkEdit(m_edt_risk,     "ER",  "1.0",               95, y, 180, y + 20)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", "MODE: %",       190, y, 260, y + 20)) return false;
-      y += rh;
-      if(!MkLabel(m_lbl_entry,   "LE",  "Entry Price:",        15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_entry,    "EE",  "",                  110, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_sl,      "LS",  "Stop Loss:",          15, y, 105, y + 20)) return false;
-      if(!MkEdit(m_edt_sl,       "ES",  "",                  110, y, 260, y + 20)) return false; y += rh;
-      if(!MkLabel(m_lbl_ratio,   "LRt", "Risk Ratio:",         15, y, 105, y + 20)) return false;
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, 110, y, 260, y + 20)) return false;
-      if(!Add(m_cbx_ratio)) return false;
-      m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15); m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3", 30); m_cbx_ratio.Select(2); y += rh;
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", 15, y, 260, y + 20)) return false; y += rh;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",      10, y,  85, y + 25)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "PLACE ORDER",  90, y, 185, y + 25)) return false;
+   CRiskPanel(){m_cl_active=false;m_risk_in_percent=true;}
+   virtual bool Create(const long chart,const string name,const int sw,const int x1,const int y1,const int x2,const int y2){
+      if(!CAppDialog::Create(chart,name,sw,x1,y1,x2,y2)) return false;
+      int lx=18,rx=267,rh=30,ch=22,bh=28,y=15,lbl=75,gap=12,ex=lx+lbl+gap;
+      if(!MkLabel(m_lbl_pair,  "LPair", Symbol(),              lx,y,lx+80,y+ch,8)) return false;
+      if(!MkLabel(m_lbl_spread,"LSpr",  InpEnableAutoSnD?"AUTO:ON":"AUTO:OFF",lx+85,y,rx,y+ch,8)) return false;
+      y+=ch+5;
+      if(!MkLabel(m_lbl_balance,"Bal","Balance: --",lx,y,rx,y+ch,8)) return false;
+      y+=ch+15;
+      if(!MkLabel(m_lbl_risk,"LR","Risk (%):",lx,y,ex-gap,y+ch)) return false;
+      if(!MkEdit(m_edt_risk,"ER","1.0",ex,y,rx-50,y+ch)) return false;
+      if(!MkButton(m_btn_risk_mode,"BRM"," % ",rx-45,y,rx,y+ch)) return false;
+      y+=rh;
+      if(!MkLabel(m_lbl_entry,"LE","Entry:",lx,y,ex-gap,y+ch)) return false;
+      if(!MkEdit(m_edt_entry,"EE","",ex,y,rx,y+ch)) return false;
+      y+=rh;
+      if(!MkLabel(m_lbl_sl,"LS","Stop Loss:",lx,y,ex-gap,y+ch)) return false;
+      if(!MkEdit(m_edt_sl,"ES","",ex,y,rx,y+ch)) return false;
+      y+=rh;
+      if(!MkLabel(m_lbl_ratio,"LRt","RR Ratio:",lx,y,ex-gap,y+ch)) return false;
+      if(!MkEdit(m_edt_ratio,"ERt","2.0",ex,y,rx,y+ch)) return false;
+      y+=rh;
+      if(!MkLabel(m_lbl_lot,"LL","Lot Size: --",lx,y,rx,y+ch,8)) return false;
+      y+=ch+20;
+      int bww=(rx-lx-10)/2;
+      if(!MkButton(m_btn_cutloss,"BCL","CL: OFF",lx,y,lx+bww,y+bh)) return false;
+      if(!MkButton(m_btn_cancel,"BC","CAN. EDIT",lx+bww+10,y,rx,y+bh)) return false;
+      y+=bh+10;
+      if(!MkButton(m_btn_place,"BP","PLACE LIMIT ORDER",lx,y,rx,y+bh,8)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",      190, y, 265, y + 25)) return false; y += 35;
-      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", 15, y, 260, y + 30)) return false;
+      y+=bh+10;
+      if(!MkButton(m_btn_buy_mkt,"BBM","BUY MKT",lx,y,lx+bww,y+bh,8)) return false;
+      m_btn_buy_mkt.ColorBackground(C'0,130,80'); m_btn_buy_mkt.Color(clrWhite);
+      if(!MkButton(m_btn_sell_mkt,"BSM","SELL MKT",lx+bww+10,y,rx,y+bh,8)) return false;
+      m_btn_sell_mkt.ColorBackground(C'176,0,32'); m_btn_sell_mkt.Color(clrWhite);
+      y+=bh+10;
+      if(!MkButton(m_btn_close_all,"BCAll","CLOSE ALL POSITIONS",lx,y,rx,y+bh,8)) return false;
+      m_btn_close_all.ColorBackground(C'50,50,50'); m_btn_close_all.Color(clrWhite);
+      y+=bh+15;
+      if(!MkLabel(m_lbl_status,"LSt","Status: AutoSnD Ready",lx,y,rx,y+ch)) return false;
       return true;
    }
-   virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
-      if(id == CHARTEVENT_CUSTOM + ON_CLICK) {
-         if(lp == m_btn_place.Id())   { OnPlace();     return true; }
-         if(lp == m_btn_cancel.Id())  { OnCancelBtn(); return true; }
-         if(lp == m_btn_cutloss.Id()) { OnCutLoss();   return true; }
-         if(lp == m_btn_risk_mode.Id()){ OnRiskModeToggle(); return true; }
+   virtual bool OnEvent(const int id,const long &lp,const double &dp,const string &sp){
+      if(id==CHARTEVENT_CUSTOM+ON_CLICK){
+         if(lp==m_btn_place.Id())    {OnPlace();         return true;}
+         if(lp==m_btn_cancel.Id())   {OnCancelBtn();     return true;}
+         if(lp==m_btn_cutloss.Id())  {OnCutLoss();       return true;}
+         if(lp==m_btn_risk_mode.Id()){OnRiskModeToggle();return true;}
+         if(lp==m_btn_buy_mkt.Id())  {OnBuyMarket();     return true;}
+         if(lp==m_btn_sell_mkt.Id()) {OnSellMarket();    return true;}
+         if(lp==m_btn_close_all.Id()){OnCloseAll();      return true;}
       }
-      if(id == CHARTEVENT_CUSTOM + ON_END_EDIT) { if(lp == m_edt_risk.Id() || lp == m_edt_entry.Id() || lp == m_edt_sl.Id()) { OnInput(); return true; } }
-      return CAppDialog::OnEvent(id, lp, dp, sp);
+      if(id==CHARTEVENT_CUSTOM+ON_END_EDIT){
+         if(lp==m_edt_risk.Id()||lp==m_edt_entry.Id()||lp==m_edt_sl.Id()||lp==m_edt_ratio.Id()){OnInput();return true;}
+      }
+      return CAppDialog::OnEvent(id,lp,dp,sp);
    }
 };
-
 CRiskPanel ExtPanel;
 
 //=====================================================================
-// [5] JOURNAL WEBHOOK & POLLING SYNCRONIZATION (MT4)
+// [5] JOURNAL WEBHOOK (MT4 Polling)
 //=====================================================================
-void SendTradeDataToWebhook(int ticket, string eventType)
-  {
-   if(InpWebhookURL == "" || InpWebhookToken == "") return;
-   
-   string symbol = ""; string typeStr = ""; string comment = "";
-   double entryPrice=0, closePrice=0, slPrice=0, tpPrice=0, lotSize=0, profitLoss=0, swap=0, commission=0;
-   long magicNumber=0; datetime openTime=0, closeTime=0;
-
-   int mode = (eventType == "deal_close" || eventType == "pending_cancel") ? MODE_HISTORY : MODE_TRADES;
-   if(!OrderSelect(ticket, SELECT_BY_TICKET, mode)) return;
-
-   symbol = OrderSymbol();
-   int ot = OrderType();
-   if(eventType == "deal_close" || eventType == "pending_cancel") {
-      if(ot == OP_BUY) typeStr = "buy_closed";
-      else if(ot == OP_SELL) typeStr = "sell_closed";
-      else typeStr = "pending_cancel";
+void SendTradeDataToWebhook(int ticket,string eventType){
+   if(InpWebhookURL==""||InpWebhookToken=="") return;
+   string symbol="",typeStr="",comment="";
+   double entryPrice=0,closePrice=0,slPrice=0,tpPrice=0,lotSize=0,profitLoss=0,swap=0,commission=0;
+   long magicNumber=0; datetime openTime=0,closeTime=0;
+   int mode=(eventType=="deal_close"||eventType=="pending_cancel")?MODE_HISTORY:MODE_TRADES;
+   if(!OrderSelect(ticket,SELECT_BY_TICKET,mode)) return;
+   symbol=OrderSymbol();
+   int ot=OrderType();
+   if(eventType=="deal_close"||eventType=="pending_cancel"){
+      if(ot==OP_BUY) typeStr="buy_closed";
+      else if(ot==OP_SELL) typeStr="sell_closed";
+      else typeStr="pending_cancel";
    } else {
-      if(ot == OP_BUY) typeStr = "buy";
-      else if(ot == OP_SELL) typeStr = "sell";
-      else if(ot == OP_BUYLIMIT) typeStr = "buy_limit";
-      else if(ot == OP_SELLLIMIT) typeStr = "sell_limit";
-      else if(ot == OP_BUYSTOP) typeStr = "buy_stop";
-      else if(ot == OP_SELLSTOP) typeStr = "sell_stop";
+      if(ot==OP_BUY) typeStr="buy";
+      else if(ot==OP_SELL) typeStr="sell";
+      else if(ot==OP_BUYLIMIT) typeStr="buy_limit";
+      else if(ot==OP_SELLLIMIT) typeStr="sell_limit";
+      else if(ot==OP_BUYSTOP) typeStr="buy_stop";
+      else if(ot==OP_SELLSTOP) typeStr="sell_stop";
    }
-   
-   if (eventType == "balance") {
-      typeStr = (OrderProfit() >= 0) ? "deposit" : "withdrawal";
-      entryPrice = 0; closePrice = 0; slPrice = 0; tpPrice = 0;
-      lotSize = 0; profitLoss = OrderProfit();
-      swap = 0; commission = 0; magicNumber = 0;
-      comment = OrderComment();
-      openTime = OrderOpenTime(); closeTime = openTime;
-      symbol = "";
+   if(eventType=="balance"){
+      typeStr=(OrderProfit()>=0)?"deposit":"withdrawal";
+      profitLoss=OrderProfit(); comment=OrderComment();
+      openTime=OrderOpenTime(); closeTime=openTime; symbol="";
    } else {
-      entryPrice = OrderOpenPrice(); closePrice = OrderClosePrice();
-      slPrice = OrderStopLoss(); tpPrice = OrderTakeProfit();
-      lotSize = OrderLots(); profitLoss = OrderProfit();
-      swap = OrderSwap(); commission = OrderCommission();
-      magicNumber = OrderMagicNumber(); comment = OrderComment();
-      openTime = OrderOpenTime(); closeTime = OrderCloseTime();
+      entryPrice=OrderOpenPrice(); closePrice=OrderClosePrice();
+      slPrice=OrderStopLoss(); tpPrice=OrderTakeProfit();
+      lotSize=OrderLots(); profitLoss=OrderProfit();
+      swap=OrderSwap(); commission=OrderCommission();
+      magicNumber=OrderMagicNumber(); comment=OrderComment();
+      openTime=OrderOpenTime(); closeTime=OrderCloseTime();
    }
-   string oTS = (openTime > 0) ? TimeToString(openTime, TIME_DATE | TIME_SECONDS) : "";
-   string cTS = (closeTime > 0) ? TimeToString(closeTime, TIME_DATE | TIME_SECONDS) : "";
-   StringReplace(oTS, ".", "-"); StringReplace(cTS, ".", "-");
-   
-   string accLogin = IntegerToString((int)AccountInfoInteger(ACCOUNT_LOGIN));
-   string accServer = AccountInfoString(ACCOUNT_SERVER);
-   string accountName = accLogin + " - " + accServer;
-   StringReplace(accountName, "\"", "\\\"");
-   
-   string accCurr = AccountInfoString(ACCOUNT_CURRENCY); StringToLower(accCurr);
-   double div = (StringFind(accCurr, "c") >= 0) ? 100.0 : 1.0;
-   
-   string json = "{";
-   json += "\"account_name\": \"" + accountName + "\",";
-   json += "\"ticket_id\": \"" + IntegerToString(ticket) + "\", \"symbol\": \"" + symbol + "\", \"type\": \"" + typeStr + "\",";
-   json += "\"entry_price\": " + DoubleToString(entryPrice, 5) + ", \"close_price\": " + DoubleToString(closePrice, 5) + ",";
-   json += "\"sl_price\": " + DoubleToString(slPrice, 5) + ", \"tp_price\": " + DoubleToString(tpPrice, 5) + ",";
-   json += "\"lot_size\": " + DoubleToString(lotSize, 2) + ", \"profit_loss\": " + DoubleToString(profitLoss/div, 2) + ",";
-   json += "\"swap\": " + DoubleToString(swap/div, 2) + ", \"commission\": " + DoubleToString(commission/div, 2) + ",";
-   if(oTS != "") json += "\"open_time\": \"" + oTS + "\",";
-   if(cTS != "") json += "\"close_time\": \"" + cTS + "\",";
-   json += "\"magic_number\": \"" + IntegerToString((int)magicNumber) + "\",";
-   StringReplace(comment, "\"", "\\\""); json += "\"comment\": \"" + comment + "\",";
-   json += "\"balance\": " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE)/div, 2) + "}";
-
-   string headers = "Content-Type: application/json\r\nX-Webhook-Token: " + InpWebhookToken + "\r\n";
-   char post[], resW[];
-   StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
-   int ps = ArraySize(post); if(ps > 0) ArrayResize(post, ps - 1);
+   string oTS=(openTime>0)?TimeToString(openTime,TIME_DATE|TIME_SECONDS):"";
+   string cTS=(closeTime>0)?TimeToString(closeTime,TIME_DATE|TIME_SECONDS):"";
+   StringReplace(oTS,".","-"); StringReplace(cTS,".","-");
+   string accLogin=IntegerToString((int)AccountInfoInteger(ACCOUNT_LOGIN));
+   string accServer=AccountInfoString(ACCOUNT_SERVER);
+   string accountName=accLogin+" - "+accServer;
+   StringReplace(accountName,"\"","\\\"");
+   string accCurr=AccountInfoString(ACCOUNT_CURRENCY); StringToLower(accCurr);
+   double div=(StringFind(accCurr,"c")>=0)?100.0:1.0;
+   string json="{";
+   json+="\"account_name\": \""+accountName+"\",";
+   json+="\"ticket_id\": \""+IntegerToString(ticket)+"\", \"symbol\": \""+symbol+"\", \"type\": \""+typeStr+"\",";
+   json+="\"entry_price\": "+DoubleToString(entryPrice,5)+", \"close_price\": "+DoubleToString(closePrice,5)+",";
+   json+="\"sl_price\": "+DoubleToString(slPrice,5)+", \"tp_price\": "+DoubleToString(tpPrice,5)+",";
+   json+="\"lot_size\": "+DoubleToString(lotSize,2)+", \"profit_loss\": "+DoubleToString(profitLoss/div,2)+",";
+   json+="\"swap\": "+DoubleToString(swap/div,2)+", \"commission\": "+DoubleToString(commission/div,2)+",";
+   if(oTS!="") json+="\"open_time\": \""+oTS+"\",";
+   if(cTS!="") json+="\"close_time\": \""+cTS+"\",";
+   json+="\"magic_number\": \""+IntegerToString((int)magicNumber)+"\",";
+   StringReplace(comment,"\"","\\\""); json+="\"comment\": \""+comment+"\",";
+   json+="\"balance\": "+DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE)/div,2)+"}";
+   string headers="Content-Type: application/json\r\nX-Webhook-Token: "+InpWebhookToken+"\r\n";
+   char post[],resW[]; StringToCharArray(json,post,0,WHOLE_ARRAY,CP_UTF8);
+   int ps=ArraySize(post); if(ps>0) ArrayResize(post,ps-1);
    string resHeaders;
-   int res = WebRequest("POST", InpWebhookURL, headers, 3000, post, resW, resHeaders);
-   if(res == -1) {
-      int err = GetLastError();
-      if(err == 4060) Print("WEBHOOK BLOCKED! Please go to Tools -> Options -> Expert Advisors, tick 'Allow WebRequest' and add: http://jurnaltradingku.my.id");
-      else Print("WEBHOOK ERROR! Code: ", err);
-   } else if(res != 200 && res != 201) {
-      Print("WEBHOOK SERVER ERROR! HTTP Response Code: ", res);
-      string resStr = CharArrayToString(resW);
-      Print("Server Reply: ", resStr);
-   } else {
-      Print("Webhook Success! Sent Ticket ", ticket, " Event: ", eventType);
+   int res=WebRequest("POST",InpWebhookURL,headers,3000,post,resW,resHeaders);
+   if(res==-1){int err=GetLastError();if(err==4060)Print("WEBHOOK BLOCKED!");else Print("WEBHOOK ERROR! Code:",err);}
+}
+
+void InitialHistorySync(){
+   if(InpResyncDays<=0||InpWebhookURL=="") return;
+   datetime from=TimeCurrent()-(InpResyncDays*86400);
+   int histTotal=OrdersHistoryTotal();
+   for(int i=0;i<histTotal;i++){
+      if(!OrderSelect(i,SELECT_BY_POS,MODE_HISTORY)) continue;
+      int ot=OrderType(); datetime ct=OrderCloseTime();
+      if(ct<from&&ct!=0) continue;
+      if(ot==6) SendTradeDataToWebhook(OrderTicket(),"balance");
+      else if(ot<=OP_SELL) SendTradeDataToWebhook(OrderTicket(),"deal_close");
+      else SendTradeDataToWebhook(OrderTicket(),"pending_cancel");
    }
-  }
-
-void InitialHistorySync()
-  {
-   if(InpResyncDays <= 0 || InpWebhookURL == "") return;
-   datetime from = TimeCurrent() - (InpResyncDays * 86400);
-   Print("InitialHistorySync: starting sync for last ", InpResyncDays, " days...");
-
-   // -----------------------------------------------------------------------
-   // STEP 1: Send all closed trades and balance entries from history
-   // -----------------------------------------------------------------------
-   int closedCount = 0;
-   int balanceCount = 0;
-   int histTotal = OrdersHistoryTotal();
-   for(int i = 0; i < histTotal; i++)
-     {
-      if(!OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) continue;
-      int ot = OrderType();
-      datetime closeT = OrderCloseTime();
-      // Include if: (1) close_time is in range, OR (2) it's an open position (close_time == 0)
-      if(closeT < from && closeT != 0) continue;
-      if(ot == 6) // OP_BALANCE
-        {
-         SendTradeDataToWebhook(OrderTicket(), "balance");
-         balanceCount++;
-        }
-      else if(ot <= OP_SELL)
-        {
-         SendTradeDataToWebhook(OrderTicket(), "deal_close");
-         closedCount++;
-        }
-      else
-        {
-         SendTradeDataToWebhook(OrderTicket(), "pending_cancel");
-        }
-     }
-   Print("InitialHistorySync: sent ", closedCount, " closed trades, ", balanceCount, " balance entries.");
-
-   // -----------------------------------------------------------------------
-   // STEP 2: Send all currently open positions
-   // -----------------------------------------------------------------------
-   ArrayResize(g_active_tickets, 0);
-   int current_tickets[];
-   int openCount = 0;
-   for(int i = 0; i < OrdersTotal(); i++)
-     {
-      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
-      int sz = ArraySize(current_tickets);
-      ArrayResize(current_tickets, sz + 1);
-      current_tickets[sz] = OrderTicket();
-     }
-   ArrayResize(g_active_tickets, ArraySize(current_tickets));
-   for(int i = 0; i < ArraySize(current_tickets); i++)
-     {
-      g_active_tickets[i] = current_tickets[i];
-      if(!OrderSelect(current_tickets[i], SELECT_BY_TICKET, MODE_TRADES)) continue;
-      int ot = OrderType();
-      if(ot <= OP_SELL) { SendTradeDataToWebhook(current_tickets[i], "deal_open"); openCount++; }
-      else SendTradeDataToWebhook(current_tickets[i], "pending_order");
-     }
-   Print("InitialHistorySync: sent ", openCount, " open positions. DONE.");
-  }
-
-
-void PollTradeEvents()
-  {
-   int current_tickets[];
-   for(int i=0; i<OrdersTotal(); i++) {
-       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
-           int tk = OrderTicket();
-           int s=ArraySize(current_tickets); ArrayResize(current_tickets,s+1); current_tickets[s]=tk;
-           bool found = false;
-           for(int j=0; j<ArraySize(g_active_tickets); j++) if(g_active_tickets[j] == tk) { found = true; break; }
-           if(!found) { // New order detected
-               if(OrderType() <= OP_SELL) SendTradeDataToWebhook(tk, "deal_open");
-               else SendTradeDataToWebhook(tk, "pending_order");
-           }
-       }
+   ArrayResize(g_active_tickets,0);
+   for(int i=0;i<OrdersTotal();i++){
+      if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+      int sz=ArraySize(g_active_tickets); ArrayResize(g_active_tickets,sz+1);
+      g_active_tickets[sz]=OrderTicket();
+      int ot=OrderType();
+      if(ot<=OP_SELL) SendTradeDataToWebhook(OrderTicket(),"deal_open");
+      else SendTradeDataToWebhook(OrderTicket(),"pending_order");
    }
-   
-   for(int i=0; i<ArraySize(g_active_tickets); i++) {
-       int old_tk = g_active_tickets[i];
-       bool found = false;
-       for(int j=0; j<ArraySize(current_tickets); j++) if(current_tickets[j] == old_tk) { found = true; break; }
-       if(!found) { // Ticket disappeared -> It closed or canceled
-           if(OrderSelect(old_tk, SELECT_BY_TICKET, MODE_HISTORY)) {
-               if(OrderType() <= OP_SELL) SendTradeDataToWebhook(old_tk, "deal_close");
-               else SendTradeDataToWebhook(old_tk, "pending_cancel");
-           }
-       }
+   g_last_history_total=OrdersHistoryTotal();
+}
+
+void PollTradeEvents(){
+   int cur[];
+   for(int i=0;i<OrdersTotal();i++){
+      if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+      int tk=OrderTicket();
+      int s=ArraySize(cur); ArrayResize(cur,s+1); cur[s]=tk;
+      bool found=false;
+      for(int j=0;j<ArraySize(g_active_tickets);j++) if(g_active_tickets[j]==tk){found=true;break;}
+      if(!found){
+         if(OrderType()<=OP_SELL) SendTradeDataToWebhook(tk,"deal_open");
+         else SendTradeDataToWebhook(tk,"pending_order");
+      }
    }
-   
-   // Check for new deposits/withdrawals in History
-   int histTotal = OrdersHistoryTotal();
-   if(histTotal > g_last_history_total) {
-       for(int i = g_last_history_total; i < histTotal; i++) {
-           if(OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) {
-               if(OrderType() == 6) { // OP_BALANCE
-                   SendTradeDataToWebhook(OrderTicket(), "balance");
-               }
-           }
-       }
-       g_last_history_total = histTotal;
+   for(int i=0;i<ArraySize(g_active_tickets);i++){
+      int old=g_active_tickets[i]; bool found=false;
+      for(int j=0;j<ArraySize(cur);j++) if(cur[j]==old){found=true;break;}
+      if(!found&&OrderSelect(old,SELECT_BY_TICKET,MODE_HISTORY)){
+         if(OrderType()<=OP_SELL) SendTradeDataToWebhook(old,"deal_close");
+         else SendTradeDataToWebhook(old,"pending_cancel");
+      }
    }
-   
-   ArrayResize(g_active_tickets, ArraySize(current_tickets));
-   for(int i=0; i<ArraySize(current_tickets); i++) g_active_tickets[i] = current_tickets[i];
-  }
+   int histTotal=OrdersHistoryTotal();
+   if(histTotal>g_last_history_total){
+      for(int i=g_last_history_total;i<histTotal;i++){
+         if(OrderSelect(i,SELECT_BY_POS,MODE_HISTORY)&&OrderType()==6)
+            SendTradeDataToWebhook(OrderTicket(),"balance");
+      }
+      g_last_history_total=histTotal;
+   }
+   ArrayResize(g_active_tickets,ArraySize(cur));
+   for(int i=0;i<ArraySize(cur);i++) g_active_tickets[i]=cur[i];
+}
 
 //=====================================================================
-// [6] AUTO SND TRADING ENGINE - SnD_Zone Logic + Fibo Filter
+// [6] AUTO SND TRADING ENGINE
 //=====================================================================
-
-// ---- Zone Drawing ----
-void DrawZone(bool is_demand, double top, double btm, datetime start_time)
-  {
-   if(g_zone_count >= MAX_ZONES) return;
-   color col_use = is_demand ? InpDemandColor : InpSupplyColor;
-   string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
-   datetime future_time = TimeCurrent() + 259200000;
-   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,future_time,btm))
-     { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,Digits)+" Btm:"+DoubleToString(btm,Digits)); }
+void DrawZone(bool is_demand,double top,double btm,datetime start_time){
+   if(g_zone_count>=MAX_ZONES) return;
+   color col=is_demand?InpDemandColor:InpSupplyColor;
+   string uid=NextID(),rname="SnD_Z_"+uid,lname="SnD_ZL_"+uid;
+   datetime future=D'2099.12.31';
+   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,future,btm))
+      {ObjectSetInteger(0,rname,OBJPROP_COLOR,col);ObjectSetInteger(0,rname,OBJPROP_FILL,true);ObjectSetInteger(0,rname,OBJPROP_BACK,true);ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);}
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
-   string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
-   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
-   g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
-   g_zones[g_zone_count].active=true;
-   g_zone_count++;
-  }
+      {ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply");ObjectSetInteger(0,lname,OBJPROP_COLOR,col);ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER);ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,lname,OBJPROP_BACK,true);}
+   string ptop="SnD_PT_"+uid,pbtm="SnD_PB_"+uid;
+   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)){ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,Digits));ObjectSetInteger(0,ptop,OBJPROP_COLOR,col);ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER);ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,ptop,OBJPROP_BACK,true);}
+   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)){ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,Digits));ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col);ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER);ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,pbtm,OBJPROP_BACK,true);}
+   g_zones[g_zone_count].rect_name=rname;g_zones[g_zone_count].lbl_name=lname;g_zones[g_zone_count].lbl_top=ptop;g_zones[g_zone_count].lbl_btm=pbtm;
+   g_zones[g_zone_count].is_demand=is_demand;g_zones[g_zone_count].top=top;g_zones[g_zone_count].btm=btm;g_zones[g_zone_count].start_time=start_time;
+   g_zones[g_zone_count].active=true; g_zone_count++;
+}
 
-void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
-  {
+void DrawBOS(bool is_bull,double price,datetime x1,datetime x2){
    if(!InpShowBOS) return;
    color col=is_bull?InpBOSBull:InpBOSBear;
    string uid=NextID(),ln="SnD_B_"+uid,lb="SnD_BL_"+uid;
-   if(ObjectCreate(0,ln,OBJ_TREND,0,x1,price,x2,price)) { ObjectSetInteger(0,ln,OBJPROP_COLOR,col); ObjectSetInteger(0,ln,OBJPROP_STYLE,STYLE_DASH); ObjectSetInteger(0,ln,OBJPROP_RAY_RIGHT,false); ObjectSetInteger(0,ln,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ln,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,ln,OBJ_TREND,0,x1,price,x2,price)){ObjectSetInteger(0,ln,OBJPROP_COLOR,col);ObjectSetInteger(0,ln,OBJPROP_STYLE,STYLE_DASH);ObjectSetInteger(0,ln,OBJPROP_RAY_RIGHT,false);ObjectSetInteger(0,ln,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,ln,OBJPROP_BACK,true);}
    datetime mid=(datetime)(((long)x1+(long)x2)/2);
-   if(ObjectCreate(0,lb,OBJ_TEXT,0,mid,price)) { ObjectSetString(0,lb,OBJPROP_TEXT,"BOS"); ObjectSetInteger(0,lb,OBJPROP_COLOR,col); ObjectSetInteger(0,lb,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lb,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lb,OBJPROP_BACK,true); }
-  }
+   if(ObjectCreate(0,lb,OBJ_TEXT,0,mid,price)){ObjectSetString(0,lb,OBJPROP_TEXT,"BOS");ObjectSetInteger(0,lb,OBJPROP_COLOR,col);ObjectSetInteger(0,lb,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,lb,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,lb,OBJPROP_BACK,true);}
+}
 
-void MitigateZone(int idx, datetime t)
-  {
+void MitigateZone(int idx,datetime t){
    g_zones[idx].active=false;
-   
-   ObjectDelete(0,g_zones[idx].lbl_name); 
-   ObjectDelete(0,g_zones[idx].lbl_top); 
-   ObjectDelete(0,g_zones[idx].lbl_btm);
-   
-   if(InpShowMitigated)
-     {
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false); // Transparent background
-     }
-   else
-     {
-      ObjectDelete(0,g_zones[idx].rect_name); 
-     }
-  }
+   ObjectDelete(0,g_zones[idx].lbl_name);ObjectDelete(0,g_zones[idx].lbl_top);ObjectDelete(0,g_zones[idx].lbl_btm);
+   if(InpShowMitigated){ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false);}
+   else ObjectDelete(0,g_zones[idx].rect_name);
+}
 
-void UpdateZoneLabelsTime(datetime t)
-  {
-   double pt = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
-   for(int i=0;i<g_zone_count;i++) 
-      if(g_zones[i].active) 
-        { 
-         datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
-         ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0);
-         ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top + 5*pt); 
-         ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm - 5*pt); 
-        }
-  }
+void UpdateZoneLabelsTime(datetime t){
+   for(int i=0;i<g_zone_count;i++) if(g_zones[i].active){
+      datetime mid=(datetime)(((long)g_zones[i].start_time+(long)t)/2);
+      ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top+g_zones[i].btm)/2.0);
+      ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top);
+      ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm);
+   }
+}
 
-// ---- Pivot Detection ----
-double GetPivotHigh(int lb, int shift)
-  {
-   if(shift+2*lb >= iBars(Symbol(),Period())) return 0;
-   double c = iHigh(Symbol(),Period(),shift+lb);
-   for(int i=shift;i<=shift+2*lb;i++) { if(i==shift+lb) continue; if(iHigh(Symbol(),Period(),i)>=c) return 0; }
+double GetPivotHigh(int lb,int shift){
+   if(shift+2*lb>=iBars(Symbol(),Period())) return 0;
+   double c=iHigh(Symbol(),Period(),shift+lb);
+   for(int i=shift;i<=shift+2*lb;i++){if(i==shift+lb) continue;if(iHigh(Symbol(),Period(),i)>=c) return 0;}
    return c;
-  }
-
-double GetPivotLow(int lb, int shift)
-  {
-   if(shift+2*lb >= iBars(Symbol(),Period())) return 0;
-   double c = iLow(Symbol(),Period(),shift+lb);
-   for(int i=shift;i<=shift+2*lb;i++) { if(i==shift+lb) continue; if(iLow(Symbol(),Period(),i)<=c) return 0; }
+}
+double GetPivotLow(int lb,int shift){
+   if(shift+2*lb>=iBars(Symbol(),Period())) return 0;
+   double c=iLow(Symbol(),Period(),shift+lb);
+   for(int i=shift;i<=shift+2*lb;i++){if(i==shift+lb) continue;if(iLow(Symbol(),Period(),i)<=c) return 0;}
    return c;
-  }
+}
+int FindDemandBase(int shift){for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)<iOpen(Symbol(),Period(),i)) return i;return -1;}
+int FindSupplyBase(int shift){for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)>iOpen(Symbol(),Period(),i)) return i;return -1;}
 
-int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)<iOpen(Symbol(),Period(),i)) return i; return -1; }
-int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)>iOpen(Symbol(),Period(),i)) return i; return -1; }
-
-void CheckMitigation(int shift)
-  {
-   double l=iLow(Symbol(),Period(),shift), h=iHigh(Symbol(),Period(),shift);
+void CheckMitigation(int shift){
+   double l=iLow(Symbol(),Period(),shift),h=iHigh(Symbol(),Period(),shift);
    datetime bt=iTime(Symbol(),Period(),shift);
-   for(int i=g_zone_count-1;i>=0;i--)
-     {
+   for(int i=g_zone_count-1;i>=0;i--){
       if(!g_zones[i].active||bt<=g_zones[i].start_time) continue;
       bool mit=g_zones[i].is_demand?(l<=g_zones[i].top):(h>=g_zones[i].btm);
       if(mit) MitigateZone(i,bt);
-     }
-  }
+   }
+}
 
-// ---- Execution ----
-void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
-  {
+void ExecuteAutoTrade(bool isDemand,double zoneTop,double zoneBtm,datetime zoneTime){
    if(g_is_scanning_history) return;
    if(!InpEnableAutoSnD) return;
    if(IsZoneTraded(zoneTime)) return;
-   double risk = StringToDouble(ExtPanel.m_edt_risk.Text());
-   if(risk <= 0) return;
-   int digs = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
-   double pt = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
-   double entryPrice = isDemand ? zoneTop : zoneBtm;
-   double stopLoss = isDemand ? (zoneBtm - InpBufferPoints*pt) : (zoneTop + InpBufferPoints*pt);
-   entryPrice = NormalizeDouble(entryPrice, digs);
-   stopLoss = NormalizeDouble(stopLoss, digs);
-   double lot = CalcLotSize(ExtPanel.AdjRisk(), entryPrice, stopLoss, Symbol());
-   if(lot <= 0) return;
-   long val = ExtPanel.m_cbx_ratio.Value(); if(val == 0) val = 10;
-   double mult = val / 10.0;
-   double diff = MathAbs(entryPrice - stopLoss);
-   double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
-   tpPrice = NormalizeDouble(tpPrice, digs);
-   string comm = "SND_AUTO";
-   double backupSL = stopLoss; // By default, Hard SL is the calculated Stop Loss
-   
-   if(ExtPanel.m_cl_active)
-     {
-      comm = "SND_CL_" + DoubleToString(stopLoss, digs);
-      // Soft CL is active. Set Hard SL further away (2x distance) as a safety net.
-      backupSL = isDemand ? NormalizeDouble(entryPrice - diff * 2.0, digs) : NormalizeDouble(entryPrice + diff * 2.0, digs);
-     }
-     
-   bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm)
-                          : ExtTrade.SellLimit(lot, entryPrice, Symbol(), backupSL, tpPrice, 0, 0, comm);
-   if(result)
-     {
-      MarkZoneTraded(zoneTime);
-      Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
-     }
-  }
+   double risk=StringToDouble(ExtPanel.m_edt_risk.Text());
+   if(risk<=0) return;
+   int digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
+   double pt=SymbolInfoDouble(Symbol(),SYMBOL_POINT);
+   double entryPrice=isDemand?zoneTop:zoneBtm;
+   double stopLoss=isDemand?(zoneBtm-InpBufferPoints*pt):(zoneTop+InpBufferPoints*pt);
+   entryPrice=NormalizeDouble(entryPrice,digits); stopLoss=NormalizeDouble(stopLoss,digits);
+   double lot=CalcLotSize(ExtPanel.AdjRisk(),entryPrice,stopLoss,Symbol());
+   if(lot<=0) return;
+   double mult=StringToDouble(ExtPanel.m_edt_ratio.Text()); if(mult<=0) mult=2.0;
+   double diff=MathAbs(entryPrice-stopLoss);
+   double tpPrice=isDemand?(entryPrice+diff*mult):(entryPrice-diff*mult);
+   tpPrice=NormalizeDouble(tpPrice,digits);
+   string comm="SND_AUTO";
+   double backupSL=stopLoss;
+   if(ExtPanel.m_cl_active){comm="SND_CL_"+DoubleToString(stopLoss,digits);backupSL=isDemand?NormalizeDouble(entryPrice-diff*2.0,digits):NormalizeDouble(entryPrice+diff*2.0,digits);}
+   bool result=isDemand?ExtTrade.BuyLimit(lot,entryPrice,Symbol(),backupSL,tpPrice,0,0,comm):ExtTrade.SellLimit(lot,entryPrice,Symbol(),backupSL,tpPrice,0,0,comm);
+   if(result){MarkZoneTraded(zoneTime);Print("AutoSnD Executed: ",(isDemand?"BuyLimit":"SellLimit")," Entry:",entryPrice," SL:",stopLoss," TP:",tpPrice);}
+}
 
-// ---- Draw only Fibo 38.2 and 61.8 levels (only when a valid zone is found) ----
-void DrawFiboLines(double f382, double f618, datetime from_time)
-  {
-   string uid = NextID();
-   string name382 = "SnD_F382_" + uid;
-   string name618 = "SnD_F618_" + uid;
-   color fibo_col = clrMagenta;
-   
-   int bar_from = iBarShift(Symbol(), Period(), from_time);
-   int bar_end  = MathMax(bar_from - 20, 0);
-   datetime end_time = iTime(Symbol(), Period(), bar_end);
-   
-   if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, end_time, f382))
-     {
-      ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col);
-      ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name382, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name382, OBJPROP_BACK, true);
-      ObjectSetString(0, name382, OBJPROP_TOOLTIP, "Fibo 38.2%: " + DoubleToString(f382, Digits));
-      string lbl382 = "SnD_FL382_" + uid;
-      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, end_time, f382))
-        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2"); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
-     }
-   
-   if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, end_time, f618))
-     {
-      ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col);
-      ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name618, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name618, OBJPROP_BACK, true);
-      ObjectSetString(0, name618, OBJPROP_TOOLTIP, "Fibo 61.8%: " + DoubleToString(f618, Digits));
-      string lbl618 = "SnD_FL618_" + uid;
-      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, end_time, f618))
-        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8"); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
-     }
-  }
-
-// ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
-bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
-  {
-   if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
+bool CheckFiboAndTrade(double fibo_low,double fibo_high,datetime from_time,int zone_idx){
+   if(zone_idx<0||zone_idx>=g_zone_count) return false;
    if(!g_zones[zone_idx].active) return false;
    if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
-
-   double dist    = fibo_high - fibo_low;
-   double f_upper = fibo_high - dist * 0.382; // 38.2 level
-   double f_lower = fibo_high - dist * 0.618; // 61.8 level
-
-   bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
+   double dist=fibo_high-fibo_low;
+   double f_upper=fibo_high-dist*0.382;
+   double f_lower=fibo_high-dist*0.618;
+   bool overlaps=(g_zones[zone_idx].top>=f_lower)&&(g_zones[zone_idx].btm<=f_upper);
    if(!overlaps) return false;
-
-   DrawFiboLines(f_upper, f_lower, from_time);
-   ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
+   // Golden zone: highlight the zone
+   ObjectSetInteger(0,g_zones[zone_idx].rect_name,OBJPROP_COLOR,InpGoldenZoneColor);
+   ExecuteAutoTrade(g_zones[zone_idx].is_demand,g_zones[zone_idx].top,g_zones[zone_idx].btm,g_zones[zone_idx].start_time);
    return true;
-  }
+}
 
-// ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
-void ProcessBar(int shift)
-  {
+void ProcessBar(int shift){
    g_old_last_ph=g_last_ph; g_old_last_pl=g_last_pl;
-
    double ph=GetPivotHigh(InpPivotLB,shift);
-   if(ph>0)
-     {
-      datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);
-      g_last_ph=ph; g_last_ph_time=t;
-     }
-
+   if(ph>0){datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);g_last_ph=ph;g_last_ph_time=t;}
    double pl=GetPivotLow(InpPivotLB,shift);
-   if(pl>0)
-     {
-      datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);
-      g_last_pl=pl; g_last_pl_time=t;
-     }
-
+   if(pl>0){datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);g_last_pl=pl;g_last_pl_time=t;}
    bool bull_fvg=iLow(Symbol(),Period(),shift)>iHigh(Symbol(),Period(),shift+2);
    bool bear_fvg=iHigh(Symbol(),Period(),shift)<iLow(Symbol(),Period(),shift+2);
    double cls=iClose(Symbol(),Period(),shift);
-
    bool bull_bos=bull_fvg&&g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
    bool bear_bos=bear_fvg&&g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
-
-   if(bull_bos)
-     {
+   if(bull_bos){
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
-      
-      g_fibo_bull_pending = false;
-      g_pending_bull_zone_idx = -1;
-      
+      g_fibo_bull_pending=false; g_pending_bull_zone_idx=-1;
       int base=FindDemandBase(shift);
-      if(base!=-1)
-        {
-         DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
-         g_pending_bull_zone_idx = g_zone_count - 1; 
-         g_fibo_origin_bullish  = g_last_pl;
-         g_fibo_origin_bull_time = g_last_pl_time;
-         g_fibo_bull_pending = true;
-        }
-     }
-
-   if(bear_bos)
-     {
+      if(base!=-1){DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));g_pending_bull_zone_idx=g_zone_count-1;g_fibo_origin_bullish=g_last_pl;g_fibo_origin_bull_time=g_last_pl_time;g_fibo_bull_pending=true;}
+   }
+   if(bear_bos){
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(Symbol(),Period(),shift));
-      
-      g_fibo_bear_pending = false;
-      g_pending_bear_zone_idx = -1;
-      
+      g_fibo_bear_pending=false; g_pending_bear_zone_idx=-1;
       int base=FindSupplyBase(shift);
-      if(base!=-1)
-        {
-         DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
-         g_pending_bear_zone_idx = g_zone_count - 1; 
-         g_fibo_origin_bearish  = g_last_ph;
-         g_fibo_origin_bear_time = g_last_ph_time;
-         g_fibo_bear_pending = true;
-        }
-     }
-
-   if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
-     {
-      if(CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx))
-        { g_fibo_bull_pending = false; g_pending_bull_zone_idx = -1; }
-     }
-
-   if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
-     {
-      if(CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx))
-        { g_fibo_bear_pending = false; g_pending_bear_zone_idx = -1; }
-     }
-
+      if(base!=-1){DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));g_pending_bear_zone_idx=g_zone_count-1;g_fibo_origin_bearish=g_last_ph;g_fibo_origin_bear_time=g_last_ph_time;g_fibo_bear_pending=true;}
+   }
+   if(g_fibo_bull_pending&&ph>0&&g_last_ph_time>g_fibo_origin_bull_time)
+      if(CheckFiboAndTrade(g_fibo_origin_bullish,g_last_ph,g_fibo_origin_bull_time,g_pending_bull_zone_idx))
+         {g_fibo_bull_pending=false;g_pending_bull_zone_idx=-1;}
+   if(g_fibo_bear_pending&&pl>0&&g_last_pl_time>g_fibo_origin_bear_time)
+      if(CheckFiboAndTrade(g_last_pl,g_fibo_origin_bearish,g_fibo_origin_bear_time,g_pending_bear_zone_idx))
+         {g_fibo_bear_pending=false;g_pending_bear_zone_idx=-1;}
    CheckMitigation(shift);
-  }
+}
 
-void ScanHistory()
-  {
-   g_is_scanning_history = true;
+void ScanHistory(){
+   g_is_scanning_history=true;
    int total=iBars(Symbol(),Period());
    int start=MathMin(InpHistoryBars+InpPivotLB*2+InpOriginLookback,total-2);
    for(int i=start;i>=1;i--) ProcessBar(i);
-   g_is_scanning_history = false;
-  }
+   g_is_scanning_history=false;
+}
 
-void DeleteAllSnDObjects()
-  {
-   for(int i=ObjectsTotal()-1;i>=0;i--)
-     { string n=ObjectName(i); if(StringFind(n,"SnD_")==0) ObjectDelete(n); }
-  }
+void DeleteAllSnDObjects(){
+   for(int i=ObjectsTotal()-1;i>=0;i--){string n=ObjectName(i);if(StringFind(n,"SnD_")==0) ObjectDelete(n);}
+}
 
+//=====================================================================
+// [6.1] MOMENTUM INDICATOR (MQL4 - no handle needed)
+//=====================================================================
+void DrawMomentumArrow(bool isBullish,int index){
+   datetime t=iTime(Symbol(),Period(),index);
+   double high=iHigh(Symbol(),Period(),index);
+   double low=iLow(Symbol(),Period(),index);
+   double range=high-low;
+   string objName=(isBullish?"MomUp_":"MomDn_")+TimeToString(t);
+   double price=isBullish?(low-(range*0.2)):(high+(range*0.2));
+   if(ObjectFind(objName)>=0){ObjectMove(objName,0,t,price);return;}
+   if(isBullish){
+      ObjectCreate(objName,OBJ_ARROW_UP,0,t,price);
+      ObjectSet(objName,OBJPROP_COLOR,clrDodgerBlue);
+      ObjectSet(objName,OBJPROP_WIDTH,1);
+      ObjectSet(objName,OBJPROP_BACK,true);
+   } else {
+      ObjectCreate(objName,OBJ_ARROW_DOWN,0,t,price);
+      ObjectSet(objName,OBJPROP_COLOR,clrCrimson);
+      ObjectSet(objName,OBJPROP_WIDTH,1);
+      ObjectSet(objName,OBJPROP_BACK,true);
+   }
+}
+
+bool IsBullishMomentum(int index=1){
+   double atr=iATR(Symbol(),Period(),InpATRPeriod,index);
+   double high=iHigh(Symbol(),Period(),index);
+   double low=iLow(Symbol(),Period(),index);
+   double open=iOpen(Symbol(),Period(),index);
+   double close=iClose(Symbol(),Period(),index);
+   double totalLen=high-low; if(totalLen<=0) return false;
+   if(totalLen<=atr*InpATRMultiplier) return false;
+   if(close<=open) return false;
+   if((close-open)<totalLen*InpBodyPercentage) return false;
+   if((open-low)>totalLen*InpWickPercentage) return false;
+   return true;
+}
+
+bool IsBearishMomentum(int index=1){
+   double atr=iATR(Symbol(),Period(),InpATRPeriod,index);
+   double high=iHigh(Symbol(),Period(),index);
+   double low=iLow(Symbol(),Period(),index);
+   double open=iOpen(Symbol(),Period(),index);
+   double close=iClose(Symbol(),Period(),index);
+   double totalLen=high-low; if(totalLen<=0) return false;
+   if(totalLen<=atr*InpATRMultiplier) return false;
+   if(open<=close) return false;
+   if((open-close)<totalLen*InpBodyPercentage) return false;
+   if((high-open)>totalLen*InpWickPercentage) return false;
+   return true;
+}
+
+void ScanHistoricalMomentum(){
+   int total=iBars(Symbol(),Period());
+   int start=MathMin(InpHistoryBars,total-2);
+   for(int i=start;i>=1;i--){
+      if(IsBullishMomentum(i)) DrawMomentumArrow(true,i);
+      else if(IsBearishMomentum(i)) DrawMomentumArrow(false,i);
+   }
+}
+
+void ExecuteMomentumAutoTrade(bool isBullish,int shift){
+   if(!InpEnableAutoMomentum) return;
+   int digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
+   double pt=SymbolInfoDouble(Symbol(),SYMBOL_POINT);
+   double high=iHigh(Symbol(),Period(),shift);
+   double low=iLow(Symbol(),Period(),shift);
+   double stopLoss=isBullish?NormalizeDouble(low-InpBufferPoints*pt,digits):NormalizeDouble(high+InpBufferPoints*pt,digits);
+   RefreshRates();
+   double entry=isBullish?Ask:Bid;
+   if(isBullish&&stopLoss>=entry){Print("AutoMomentum: SL BUY invalid");return;}
+   if(!isBullish&&stopLoss<=entry){Print("AutoMomentum: SL SELL invalid");return;}
+   double riskAmount=ExtPanel.AdjRisk();
+   if(riskAmount<=0){Print("AutoMomentum: Risk<=0");return;}
+   double lot=CalcLotSize(riskAmount,entry,stopLoss,Symbol());
+   if(lot<=0){Print("AutoMomentum: Lot invalid (",lot,")");return;}
+   double mult=StringToDouble(ExtPanel.m_edt_ratio.Text()); if(mult<=0) mult=2.0;
+   double diff=MathAbs(entry-stopLoss);
+   double tp=isBullish?NormalizeDouble(entry+diff*mult,digits):NormalizeDouble(entry-diff*mult,digits);
+   double hardSL=stopLoss;
+   string comm="MOM_AUTO";
+   if(ExtPanel.m_cl_active){comm="RP_CL_"+DoubleToString(stopLoss,digits);hardSL=isBullish?NormalizeDouble(entry-diff*2.0,digits):NormalizeDouble(entry+diff*2.0,digits);}
+   bool result=isBullish?ExtTrade.Buy(lot,Symbol(),entry,hardSL,tp,comm):ExtTrade.Sell(lot,Symbol(),entry,hardSL,tp,comm);
+   string dir=isBullish?"BUY":"SELL";
+   if(result){Print("AutoMomentum Executed: ",dir," Lot:",lot," SL:",stopLoss," TP:",tp);ExtPanel.SetStatus("Auto Mom "+dir+" | Lot:"+DoubleToString(lot,2));}
+   else{Print("AutoMomentum FAILED ",dir," Error:",GetLastError());ExtPanel.SetStatus("AutoMom Gagal: Err "+IntegerToString(GetLastError()));}
+}
 
 //=====================================================================
 // [7] EVENT HANDLERS
 //=====================================================================
-bool g_resync_done = false;
+bool g_resync_done=false;
 
-int OnInit()
-  {
-   ChartSetInteger(0, CHART_FOREGROUND, false);
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 300, 420)) return INIT_FAILED;
+int OnInit(){
+   ChartSetInteger(0,CHART_FOREGROUND,false);
+   if(!ExtPanel.Create(0,"AutoSnD - Risk Panel",0,20,30,305,490)) return INIT_FAILED;
    ExtPanel.Run();
-   
-   ScanHistory(); 
-   g_last_processed_bar = iTime(Symbol(), Period(), 0);
-   
-   Print("AutoSnD EA MT4 v3.00 Ready. Trading: ", (InpEnableAutoSnD?"ON":"OFF"));
+   ScanHistory();
+   ScanHistoricalMomentum();
+   g_last_processed_bar=iTime(Symbol(),Period(),0);
+   Print("AutoSnD EA MT4 v3.00 Ready. Trading:",(InpEnableAutoSnD?"ON":"OFF"));
    return INIT_SUCCEEDED;
-  }
+}
 
-void OnDeinit(const int reason)
-  {
+void OnDeinit(const int reason){
    DeleteAllSnDObjects();
+   for(int i=ObjectsTotal()-1;i>=0;i--){
+      string n=ObjectName(i);
+      if(StringFind(n,"MomUp_")==0||StringFind(n,"MomDn_")==0) ObjectDelete(n);
+   }
    ExtPanel.Destroy(reason);
-  }
+}
 
-void OnTick()
-  {
-   if(!g_resync_done) { InitialHistorySync(); g_resync_done = true; }
-   
-   PollTradeEvents(); // Send webhooks on MT4 without OnTradeTransaction
-   
+void OnTick(){
+   if(!g_resync_done){InitialHistorySync();g_resync_done=true;}
+   PollTradeEvents();
    ExtPanel.UpdateStats();
    CheckCutLoss();
    CheckAutoCloseFriday();
-   
    UpdateZoneLabelsTime(TimeCurrent());
-   
-   datetime currentBarTime = iTime(Symbol(), Period(), 0);
-   if(currentBarTime != g_last_processed_bar)
-     {
+   datetime currentBarTime=iTime(Symbol(),Period(),0);
+   if(currentBarTime!=g_last_processed_bar){
       ProcessBar(1);
-      g_last_processed_bar = currentBarTime;
-     }
-  }
+      bool isBullMom=IsBullishMomentum(1);
+      bool isBearMom=IsBearishMomentum(1);
+      if(isBullMom)     {DrawMomentumArrow(true, 1);ExecuteMomentumAutoTrade(true, 1);}
+      else if(isBearMom){DrawMomentumArrow(false,1);ExecuteMomentumAutoTrade(false,1);}
+      g_last_processed_bar=currentBarTime;
+   }
+   // Early Signal (N detik sebelum close candle)
+   if(InpEarlySignalSeconds>0){
+      int sec_left=(int)(currentBarTime+Period()*60-TimeCurrent());
+      if(sec_left>0&&sec_left<=InpEarlySignalSeconds){
+         if(IsBullishMomentum(0)) DrawMomentumArrow(true,0);
+         else if(IsBearishMomentum(0)) DrawMomentumArrow(false,0);
+         else{
+            ObjectDelete("MomUp_"+TimeToString(currentBarTime));
+            ObjectDelete("MomDn_"+TimeToString(currentBarTime));
+         }
+      }
+   }
+}
 
-void OnChartEvent(const int id, const long &lp, const double &dp, const string &sp)
-  { ExtPanel.ChartEvent(id, lp, dp, sp); }
+void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
+   {ExtPanel.ChartEvent(id,lp,dp,sp);}
 //+------------------------------------------------------------------+

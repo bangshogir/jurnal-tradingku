@@ -42,8 +42,11 @@ input bool   InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
 input color  InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
+input color  InpGoldenZoneColor= clrGold;       // Warna Zona SnD di area Golden Fibo
 
 input group "=== Momentum Indicator ==="
+input int    InpEarlySignalSeconds  = 10;    // Detik Early Signal Momentum (0=Off)
+input bool   InpEnableAutoMomentum  = false; // Enable Auto Trading Candle Momentum
 input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
@@ -135,13 +138,24 @@ void CheckCutLoss()
       if(!PositionSelectByTicket(ticket)) continue;
       if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
       string comment = PositionGetString(POSITION_COMMENT);
-      if(StringFind(comment, "RP_CL_") != 0 && StringFind(comment, "SND_CL_") != 0) continue;
+      
+      // Relaksasi pembacaan comment agar tidak gagal bila broker menambah prefix (misal ex: "[sl]RP_CL_")
+      if(StringFind(comment, "RP_CL_") < 0 && StringFind(comment, "SND_CL_") < 0) continue;
+      
       int idx = StringFind(comment, "CL_");
+      if(idx < 0) continue;
+      
       double cut  = StringToDouble(StringSubstr(comment, idx + 3));
       if(cut == 0) continue;
+      
       bool is_buy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
       bool do_cut = is_buy ? (bid <= cut) : (ask >= cut);
-      if(do_cut) ExtTrade.PositionClose(ticket, 10);
+      
+      if(do_cut) 
+        {
+         Print(">>> Cut Loss / Soft SL TRIGGERED! Ticket: ", ticket, " | Comment: ", comment, " | Harga Cut: ", cut, " | Harga Sekarang: ", (is_buy?bid:ask));
+         ExtTrade.PositionClose(ticket, 10);
+        }
      }
   }
 
@@ -202,16 +216,15 @@ public:
    CLabel    m_lbl_balance, m_lbl_risk, m_lbl_entry, m_lbl_sl;
    CLabel    m_lbl_ratio,   m_lbl_lot,  m_lbl_status;
    CLabel    m_lbl_pair, m_lbl_spread, m_lbl_atr, m_lbl_footer;
-   CEdit     m_edt_risk, m_edt_entry, m_edt_sl;
-   CComboBox m_cbx_ratio;
+   CEdit     m_edt_risk, m_edt_entry, m_edt_sl, m_edt_ratio;
    CButton   m_btn_place, m_btn_cancel, m_btn_cutloss, m_btn_risk_mode;
-   CButton   m_btn_buy_mkt, m_btn_sell_mkt;
+   CButton   m_btn_buy_mkt, m_btn_sell_mkt, m_btn_close_all;
    bool      m_cl_active;
    bool      m_risk_in_percent;
 
-   bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); return Add(l); }
-   bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); return Add(e); }
-   bool      MkButton(CButton &b, string n, string t, int x1, int y1, int x2, int y2){ if(!b.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; b.Text(t); return Add(b); }
+   bool      MkLabel(CLabel &l, string n, string t, int x1, int y1, int x2, int y2, int fs=7) { if(!l.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; l.Text(t); l.FontSize(fs); return Add(l); }
+   bool      MkEdit(CEdit &e, string n, string t, int x1, int y1, int x2, int y2, int fs=7)  { if(!e.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; e.Text(t); e.FontSize(fs); return Add(e); }
+   bool      MkButton(CButton &b, string n, string t, int x1, int y1, int x2, int y2, int fs=7){ if(!b.Create(m_chart_id, m_name + n, m_subwin, x1, y1, x2, y2)) return false; b.Text(t); b.FontSize(fs); return Add(b); }
    void      SetStatus(string t) { m_lbl_status.Text("Status: " + t); }
    bool      IsCent() { string c = AccountInfoString(ACCOUNT_CURRENCY); return StringFind(c, "USC") >= 0 || StringFind(c, "ent") >= 0; }
    string    AccCurr() { return IsCent() ? "USD" : AccountInfoString(ACCOUNT_CURRENCY); }
@@ -269,8 +282,7 @@ public:
       if(lot <= 0) return;
       double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK); double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double diff = MathAbs(entry - sl);
-      long val = m_cbx_ratio.Value(); if(val == 0) val = 10;
-      double mult = val / 10.0;
+      double mult = StringToDouble(m_edt_ratio.Text()); if(mult <= 0) mult = 2.0;
       double tp = 0; bool result = false;
       if(m_cl_active) {
          double backup = is_buy ? NormalizeDouble(entry - diff * 2.0, digits) : NormalizeDouble(entry + diff * 2.0, digits);
@@ -286,6 +298,19 @@ public:
    
    void      OnBuyMarket() { ExecuteMarketOrder(true); }
    void      OnSellMarket() { ExecuteMarketOrder(false); }
+   
+   void      OnCloseAll() {
+      int count = 0;
+      for(int i = PositionsTotal() - 1; i >= 0; i--) {
+         ulong ticket = PositionGetTicket(i);
+         if(PositionGetString(POSITION_SYMBOL) == _Symbol) { ExtTrade.PositionClose(ticket); count++; }
+      }
+      for(int i = OrdersTotal() - 1; i >= 0; i--) {
+         ulong ticket = OrderGetTicket(i);
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol) { ExtTrade.OrderDelete(ticket); count++; }
+      }
+      SetStatus(count > 0 ? "Tertutup " + IntegerToString(count) + " order/posisi." : "Tidak ada order aktif.");
+   }
    
    void      ExecuteMarketOrder(bool is_buy) {
       double risk = StringToDouble(m_edt_risk.Text()); double sl = StringToDouble(m_edt_sl.Text());
@@ -303,8 +328,7 @@ public:
       double lot = CalcLotSize(AdjRisk(), entry, sl, _Symbol);
       if(lot <= 0) return;
       double diff = MathAbs(entry - sl);
-      long val = m_cbx_ratio.Value(); if(val == 0) val = 10;
-      double mult = val / 10.0;
+      double mult = StringToDouble(m_edt_ratio.Text()); if(mult <= 0) mult = 2.0;
       double tp = is_buy ? NormalizeDouble(entry + diff * mult, digits) : NormalizeDouble(entry - diff * mult, digits);
       bool result = false;
       string comm = m_cl_active ? ("RP_CL_" + DoubleToString(sl, digits)) : "RP_MKT";
@@ -324,78 +348,77 @@ public:
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
 
-      // Layout constants (koordinat terbukti aman sampai x=265)
-      int lx  = 10;   // Left padding
-      int rx  = 265;  // Right boundary (proven safe)
-      int rh  = 26;   // Row height (compact)
-      int bh  = 22;   // Button height
-      int y   = 8;    // Starting Y
-      int lbl = 95;   // Label column width (lx to lx+lbl-1 = edits start at lx+lbl+3)
-      int ex  = lx + lbl + 3; // Edit/widget X start = 108
+      int lx  = 18;   
+      int rx  = 267;  
+      int rh  = 30;   
+      int ch  = 22;   
+      int bh  = 28;   
+      int y   = 15;   
+      int lbl = 75;   
+      int gap = 12;   
+      int ex  = lx + lbl + gap;
 
-      // Row 1: Symbol | AutoSnD Status (symbol ~80px lebar, AUTO mulai dari lx+88)
-      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+83, y+16)) return false;
-      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO:ON" : "AUTO:OFF", lx+86, y, rx, y+16)) return false;
-      y += 22;
+      // Row 1: Symbol & Status
+      if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+80, y+ch, 8)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO:ON" : "AUTO:OFF", lx+85, y, rx, y+ch, 8)) return false;
+      y += ch + 5;
 
       // Row 2: Balance
-      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+16)) return false;
-      y += 22;
+      if(!MkLabel(m_lbl_balance, "Bal", "Balance: --", lx, y, rx, y+ch, 8)) return false;
+      y += ch + 15;
 
-      // Separator 1 (gap yang lebih lapang agar tidak menimpa baris Risk)
-      if(!MkLabel(m_lbl_atr, "Sep1", "- - - - - - - - - - - - - - - - - -", lx, y, rx, y+14)) return false;
-      y += 18;
-
-      // Row 3: Risk + Mode toggle (text tombol diperpendek untuk padding)
-      if(!MkLabel(m_lbl_risk, "LR", "Risk:",    lx, y, ex-3, y+16)) return false;
-      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, 190,  y+16)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", " % ", 193, y, rx, y+16)) return false;
+      // Row 3: Risk
+      if(!MkLabel(m_lbl_risk, "LR", "Risk (%):",  lx, y, ex-gap, y+ch)) return false;
+      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, rx-50, y+ch)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", " % ", rx-45, y, rx, y+ch)) return false;
       y += rh;
 
       // Row 4: Entry Price
-      if(!MkLabel(m_lbl_entry, "LE", "Entry:",    lx, y, ex-3, y+16)) return false;
-      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, rx,   y+16)) return false;
+      if(!MkLabel(m_lbl_entry, "LE", "Entry:",    lx, y, ex-gap, y+ch)) return false;
+      if(!MkEdit(m_edt_entry,  "EE", "",            ex, y, rx,   y+ch)) return false;
       y += rh;
 
       // Row 5: Stop Loss
-      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-3, y+16)) return false;
-      if(!MkEdit(m_edt_sl,  "ES", "",             ex, y, rx,   y+16)) return false;
+      if(!MkLabel(m_lbl_sl, "LS", "Stop Loss:", lx, y, ex-gap, y+ch)) return false;
+      if(!MkEdit(m_edt_sl,  "ES", "",             ex, y, rx,   y+ch)) return false;
       y += rh;
 
-      // Row 6: RR Ratio (ComboBox min 20px)
-      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-3, y+16)) return false;
-      if(!m_cbx_ratio.Create(m_chart_id, m_name + "CbR", m_subwin, ex, y, rx, y+20)) return false;
-      if(!Add(m_cbx_ratio)) return false;
-      m_cbx_ratio.ItemAdd("1:1", 10); m_cbx_ratio.ItemAdd("1:1.5", 15);
-      m_cbx_ratio.ItemAdd("1:2", 20); m_cbx_ratio.ItemAdd("1:3",  30);
-      m_cbx_ratio.Select(2);
+      // Row 6: RR Ratio
+      if(!MkLabel(m_lbl_ratio, "LRt", "RR Ratio:", lx, y, ex-gap, y+ch)) return false;
+      if(!MkEdit(m_edt_ratio, "ERt", "2.0", ex, y, rx, y+ch)) return false;
       y += rh;
 
       // Row 7: Lot Size
-      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, rx, y+16)) return false;
-      y += 22;
+      if(!MkLabel(m_lbl_lot, "LL", "Lot Size: --", lx, y, rx, y+ch, 8)) return false;
+      y += ch + 20;
 
-      // Separator 2
-      if(!MkLabel(m_lbl_footer, "Sep2", "- - - - - - - - - - - - - - - - - -", lx, y, rx, y+14)) return false;
-      y += 18;
+      // Action Buttons
+      int bww = (rx - lx - 10) / 2; // Half width minus gap
+      
+      // Row 8: Modifiers (Cutloss & Cancel)
+      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF",     lx,        y, lx+bww,  y+bh)) return false;
+      if(!MkButton(m_btn_cancel,  "BC",  "CAN. EDIT",   lx+bww+10, y, rx,      y+bh)) return false;
+      y += bh + 10;
 
-      // Row 8: Limit Order Buttons (3 kolom)
-      int bw = 82;
-      if(!MkButton(m_btn_cutloss, "BCL", "CL: OFF", lx,         y, lx+bw,     y+bh)) return false;
-      if(!MkButton(m_btn_place,   "BP",  "LIMIT",   lx+bw+3,    y, lx+bw*2+3, y+bh)) return false;
+      // Row 9: Limit Order
+      if(!MkButton(m_btn_place,   "BP",  "PLACE LIMIT ORDER", lx, y, rx, y+bh, 8)) return false;
       m_btn_place.ColorBackground(C'30,144,255'); m_btn_place.Color(clrWhite);
-      if(!MkButton(m_btn_cancel,  "BC",  "CANCEL",  lx+bw*2+6,  y, rx,        y+bh)) return false;
-      y += bh + 5;
+      y += bh + 10;
 
-      // Row 9: Market Order Buttons (2 kolom)
-      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY  MKT",  lx,  y, 134, y+bh)) return false;
+      // Row 10: Market Orders
+      if(!MkButton(m_btn_buy_mkt,  "BBM", "BUY MKT",  lx,        y, lx+bww,  y+bh, 8)) return false;
       m_btn_buy_mkt.ColorBackground(C'0,130,80'); m_btn_buy_mkt.Color(clrWhite);
-      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", 138,  y, rx,  y+bh)) return false;
+      if(!MkButton(m_btn_sell_mkt, "BSM", "SELL MKT", lx+bww+10, y, rx,      y+bh, 8)) return false;
       m_btn_sell_mkt.ColorBackground(C'176,0,32'); m_btn_sell_mkt.Color(clrWhite);
-      y += bh + 8;
+      y += bh + 10;
 
-      // Row 10: Status
-      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+16)) return false;
+      // Row 11: Close All
+      if(!MkButton(m_btn_close_all, "BCAll", "CLOSE ALL POSITIONS", lx, y, rx, y+bh, 8)) return false;
+      m_btn_close_all.ColorBackground(C'50,50,50'); m_btn_close_all.Color(clrWhite);
+      y += bh + 15;
+
+      // Status
+      if(!MkLabel(m_lbl_status, "LSt", "Status: AutoSnD Ready", lx, y, rx, y+ch)) return false;
       return true;
    }
    virtual bool  OnEvent(const int id, const long &lp, const double &dp, const string &sp) {
@@ -406,8 +429,9 @@ public:
          if(lp == m_btn_risk_mode.Id()){ OnRiskModeToggle(); return true; }
          if(lp == m_btn_buy_mkt.Id()) { OnBuyMarket(); return true; }
          if(lp == m_btn_sell_mkt.Id()) { OnSellMarket(); return true; }
+         if(lp == m_btn_close_all.Id()) { OnCloseAll(); return true; }
       }
-      if(id == CHARTEVENT_CUSTOM + ON_END_EDIT) { if(lp == m_edt_risk.Id() || lp == m_edt_entry.Id() || lp == m_edt_sl.Id()) { OnInput(); return true; } }
+      if(id == CHARTEVENT_CUSTOM + ON_END_EDIT) { if(lp == m_edt_risk.Id() || lp == m_edt_entry.Id() || lp == m_edt_sl.Id() || lp == m_edt_ratio.Id()) { OnInput(); return true; } }
       return CAppDialog::OnEvent(id, lp, dp, sp);
    }
 };
@@ -659,10 +683,10 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time)
    if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
      { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
    if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
+     { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
    string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=ptop; g_zones[g_zone_count].lbl_btm=pbtm;
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true;
@@ -676,7 +700,7 @@ void DrawBOS(bool is_bull, double price, datetime x1, datetime x2)
    string uid=NextID(),ln="SnD_B_"+uid,lb="SnD_BL_"+uid;
    if(ObjectCreate(0,ln,OBJ_TREND,0,x1,price,x2,price)) { ObjectSetInteger(0,ln,OBJPROP_COLOR,col); ObjectSetInteger(0,ln,OBJPROP_STYLE,STYLE_DASH); ObjectSetInteger(0,ln,OBJPROP_RAY_RIGHT,false); ObjectSetInteger(0,ln,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ln,OBJPROP_BACK,true); }
    datetime mid=(datetime)(((long)x1+(long)x2)/2);
-   if(ObjectCreate(0,lb,OBJ_TEXT,0,mid,price)) { ObjectSetString(0,lb,OBJPROP_TEXT,"BOS"); ObjectSetInteger(0,lb,OBJPROP_COLOR,col); ObjectSetInteger(0,lb,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lb,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lb,OBJPROP_BACK,true); }
+   if(ObjectCreate(0,lb,OBJ_TEXT,0,mid,price)) { ObjectSetString(0,lb,OBJPROP_TEXT,"BOS"); ObjectSetInteger(0,lb,OBJPROP_COLOR,col); ObjectSetInteger(0,lb,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lb,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lb,OBJPROP_BACK,true); }
   }
 
 void MitigateZone(int idx, datetime t)
@@ -747,6 +771,78 @@ void CheckMitigation(int shift)
      }
   }
 
+// ---- Auto Momentum Trade Execution ----
+void ExecuteMomentumAutoTrade(bool isBullish, int shift)
+  {
+   if(!InpEnableAutoMomentum) return;
+   
+   int    digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   double pt     = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   double high   = iHigh(_Symbol, _Period, shift);
+   double low    = iLow(_Symbol, _Period, shift);
+   
+   // SL: ujung wick momentum candle +/- buffer
+   double stopLoss = isBullish
+                   ? NormalizeDouble(low  - InpBufferPoints * pt, digits)
+                   : NormalizeDouble(high + InpBufferPoints * pt, digits);
+   
+   // Entry: harga pasar saat ini
+   double ask   = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid   = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double entry = isBullish ? ask : bid;
+   
+   // Validasi arah SL
+   if(isBullish  && stopLoss >= entry) { Print("AutoMomentum: SL BUY tidak valid:", stopLoss, " >= entry:", entry);  return; }
+   if(!isBullish && stopLoss <= entry) { Print("AutoMomentum: SL SELL tidak valid:", stopLoss, " <= entry:", entry); return; }
+   
+   double riskAmount = ExtPanel.AdjRisk();
+   if(riskAmount <= 0) { Print("AutoMomentum: Risk <= 0, cek panel."); return; }
+   
+   double lot = CalcLotSize(riskAmount, entry, stopLoss, _Symbol);
+   if(lot <= 0)
+     {
+      string msg = "AutoMomentum: Lot tidak valid (" + DoubleToString(lot,2) + "). Cek Risk Panel atau jarak SL.";
+      Print(msg); SendAlertToWebhook(msg);
+      return;
+     }
+   
+   // TP berdasarkan RR Ratio dari panel
+   double mult = StringToDouble(ExtPanel.m_edt_ratio.Text());
+   if(mult <= 0) mult = 2.0;
+   double diff = MathAbs(entry - stopLoss);
+   double tp   = isBullish
+               ? NormalizeDouble(entry + diff * mult, digits)
+               : NormalizeDouble(entry - diff * mult, digits);
+   
+   // Gunakan Soft CL jika aktif (hard SL lebih jauh, komentar menyimpan level cut)
+   double hardSL = stopLoss;
+   string comm   = "MOM_AUTO";
+   if(ExtPanel.m_cl_active)
+     {
+      comm   = "RP_CL_" + DoubleToString(stopLoss, digits);
+      hardSL = isBullish
+             ? NormalizeDouble(entry - diff * 2.0, digits)
+             : NormalizeDouble(entry + diff * 2.0, digits);
+     }
+   
+   bool result = isBullish
+               ? ExtTrade.Buy (lot, _Symbol, entry, hardSL, tp, comm)
+               : ExtTrade.Sell(lot, _Symbol, entry, hardSL, tp, comm);
+   
+   string dir = isBullish ? "BUY" : "SELL";
+   if(result)
+     {
+      Print("AutoMomentum Executed: ", dir, " Lot:", lot, " Entry:", entry, " SL:", stopLoss, " TP:", tp);
+      ExtPanel.SetStatus("Auto Mom " + dir + " | Lot: " + DoubleToString(lot,2));
+     }
+   else
+     {
+      string err = "AutoMomentum FAILED " + dir + " | Error: " + IntegerToString(GetLastError());
+      Print(err); SendAlertToWebhook(err);
+      ExtPanel.SetStatus("AutoMom Gagal: Err " + IntegerToString(GetLastError()));
+     }
+  }
+
 // ---- Execution ----
 void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
   {
@@ -770,8 +866,8 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
       Print(msg); SendAlertToWebhook(msg);
       return;
    }
-   long val = ExtPanel.m_cbx_ratio.Value(); if(val == 0) val = 10;
-   double mult = val / 10.0;
+   double mult = StringToDouble(ExtPanel.m_edt_ratio.Text());
+   if(mult <= 0) mult = 2.0;
    double diff = MathAbs(entryPrice - stopLoss);
    double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
    tpPrice = NormalizeDouble(tpPrice, digits);
@@ -797,48 +893,6 @@ void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zo
      }
   }
 
-// ---- Draw only Fibo 38.2 and 61.8 levels (only when a valid zone is found) ----
-void DrawFiboLines(double f382, double f618, datetime from_time)
-  {
-   string uid = NextID();
-   string name382 = "SnD_F382_" + uid;
-   string name618 = "SnD_F618_" + uid;
-   color fibo_col = clrMagenta;
-   
-   // Line spans ~20 candles from from_time
-   int bar_from = iBarShift(_Symbol, _Period, from_time);
-   int bar_end  = MathMax(bar_from - 20, 0);
-   datetime end_time = iTime(_Symbol, _Period, bar_end);
-   
-   if(ObjectCreate(0, name382, OBJ_TREND, 0, from_time, f382, end_time, f382))
-     {
-      ObjectSetInteger(0, name382, OBJPROP_COLOR, fibo_col);
-      ObjectSetInteger(0, name382, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name382, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name382, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, name382, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name382, OBJPROP_BACK, true);
-      ObjectSetString(0, name382, OBJPROP_TOOLTIP, "Fibo 38.2%: " + DoubleToString(f382, _Digits));
-      string lbl382 = "SnD_FL382_" + uid;
-      if(ObjectCreate(0, lbl382, OBJ_TEXT, 0, end_time, f382))
-        { ObjectSetString(0,lbl382,OBJPROP_TEXT," 38.2"); ObjectSetInteger(0,lbl382,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl382,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl382,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl382,OBJPROP_BACK,true); ObjectSetInteger(0,lbl382,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); }
-     }
-   
-   if(ObjectCreate(0, name618, OBJ_TREND, 0, from_time, f618, end_time, f618))
-     {
-      ObjectSetInteger(0, name618, OBJPROP_COLOR, fibo_col);
-      ObjectSetInteger(0, name618, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, name618, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, name618, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, name618, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name618, OBJPROP_BACK, true);
-      ObjectSetString(0, name618, OBJPROP_TOOLTIP, "Fibo 61.8%: " + DoubleToString(f618, _Digits));
-      string lbl618 = "SnD_FL618_" + uid;
-      if(ObjectCreate(0, lbl618, OBJ_TEXT, 0, end_time, f618))
-        { ObjectSetString(0,lbl618,OBJPROP_TEXT," 61.8"); ObjectSetInteger(0,lbl618,OBJPROP_COLOR,fibo_col); ObjectSetInteger(0,lbl618,OBJPROP_FONTSIZE,8); ObjectSetInteger(0,lbl618,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lbl618,OBJPROP_BACK,true); ObjectSetInteger(0,lbl618,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); }
-     }
-  }
-
 // ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
 bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
   {
@@ -855,8 +909,11 @@ bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, in
    bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
    if(!overlaps) return false;
 
-   // Zone IS in the Golden Zone — draw Fibo lines and execute
-   DrawFiboLines(f_upper, f_lower, from_time);
+   // Zone IS in the Golden Zone — change zone color and execute
+   ObjectSetInteger(0, g_zones[zone_idx].rect_name, OBJPROP_COLOR, InpGoldenZoneColor);
+   ObjectSetInteger(0, g_zones[zone_idx].lbl_name, OBJPROP_COLOR, InpGoldenZoneColor);
+   ObjectSetInteger(0, g_zones[zone_idx].lbl_top, OBJPROP_COLOR, InpGoldenZoneColor);
+   ObjectSetInteger(0, g_zones[zone_idx].lbl_btm, OBJPROP_COLOR, InpGoldenZoneColor);
    ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
    return true;
   }
@@ -975,22 +1032,29 @@ void DeleteAllSnDObjects()
 // [6.1] MOMENTUM INDICATOR & DETECTOR
 //=====================================================================
 void DrawMomentumArrow(bool isBullish, int index) {
+   datetime t = iTime(_Symbol, _Period, index);
    double high = iHigh(_Symbol, _Period, index);
    double low  = iLow(_Symbol, _Period, index);
    double range = high - low;
-   string objName = (isBullish ? "MomUp_" : "MomDn_") + TimeToString(iTime(_Symbol, _Period, index));
-   if(ObjectFind(0, objName) >= 0) return; // Prevent duplicate
+   string objName = (isBullish ? "MomUp_" : "MomDn_") + TimeToString(t);
+   
+   double price = isBullish ? (low - (range * 0.2)) : (high + (range * 0.2));
+   
+   if(ObjectFind(0, objName) >= 0) {
+      ObjectMove(0, objName, 0, t, price);
+      return;
+   }
    
    if(isBullish) {
-      ObjectCreate(0, objName, OBJ_ARROW_UP, 0, iTime(_Symbol, _Period, index), low - (range * 0.2));
+      ObjectCreate(0, objName, OBJ_ARROW_UP, 0, t, price);
       ObjectSetInteger(0, objName, OBJPROP_COLOR, clrDodgerBlue);
-      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 1);
       ObjectSetInteger(0, objName, OBJPROP_BACK, true);
       ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bullish Momentum Candle");
    } else {
-      ObjectCreate(0, objName, OBJ_ARROW_DOWN, 0, iTime(_Symbol, _Period, index), high + (range * 0.2));
+      ObjectCreate(0, objName, OBJ_ARROW_DOWN, 0, t, price);
       ObjectSetInteger(0, objName, OBJPROP_COLOR, clrCrimson);
-      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 1);
       ObjectSetInteger(0, objName, OBJPROP_BACK, true);
       ObjectSetString(0, objName, OBJPROP_TOOLTIP, "Bearish Momentum Candle");
    }
@@ -1067,8 +1131,8 @@ bool g_resync_done = false;
 
 int OnInit()
   {
-   // Panel height calculated: ~330px of content + frame => 390px total
-   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 390)) return INIT_FAILED;
+   // Panel height increased to accommodate new padded rows (total 490px)
+   if(!ExtPanel.Create(0, "AutoSnD - Risk Panel", 0, 20, 30, 305, 490)) return INIT_FAILED;
    ExtPanel.Run();
    
    g_atr_handle = iATR(_Symbol, _Period, InpATRPeriod);
@@ -1109,10 +1173,29 @@ void OnTick()
      {
       ProcessBar(1); // Proses lilin 1 (baru tertutup)
       
-      if(IsBullishMomentum(1)) DrawMomentumArrow(true, 1);
-      else if(IsBearishMomentum(1)) DrawMomentumArrow(false, 1);
+      bool isBullMom = IsBullishMomentum(1);
+      bool isBearMom = IsBearishMomentum(1);
+      
+      if(isBullMom)      { DrawMomentumArrow(true,  1); ExecuteMomentumAutoTrade(true,  1); }
+      else if(isBearMom) { DrawMomentumArrow(false, 1); ExecuteMomentumAutoTrade(false, 1); }
       
       g_last_processed_bar = currentBarTime;
+     }
+
+   // --- Early Momentum Signal (Realtime check di shift 0) ---
+   if(InpEarlySignalSeconds > 0)
+     {
+      int seconds_left = (int)(currentBarTime + PeriodSeconds(_Period) - TimeCurrent());
+      if(seconds_left > 0 && seconds_left <= InpEarlySignalSeconds)
+        {
+         if(IsBullishMomentum(0)) DrawMomentumArrow(true, 0);
+         else if(IsBearishMomentum(0)) DrawMomentumArrow(false, 0);
+         else {
+            // Jika tiba-tiba syarat batal, hapus panah
+            ObjectDelete(0, "MomUp_" + TimeToString(currentBarTime));
+            ObjectDelete(0, "MomDn_" + TimeToString(currentBarTime));
+         }
+        }
      }
   }
 
