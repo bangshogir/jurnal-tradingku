@@ -226,8 +226,7 @@ class DashboardController extends Controller
 
     public function settings()
     {
-        $telegramRoutings = \App\Models\TelegramRouting::where('user_id', Auth::id())->get();
-        return view('settings', compact('telegramRoutings'));
+        return view('settings');
     }
 
     public function reports(\Illuminate\Http\Request $request)
