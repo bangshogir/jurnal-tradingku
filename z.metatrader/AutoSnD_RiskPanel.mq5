@@ -44,6 +44,10 @@ input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 input color  InpGoldenZoneColor= clrGold;       // Warna Zona SnD di area Golden Fibo
 
+input group "=== Imbalance & FVG Filter ==="
+input bool   InpFilterFVG       = true;          // Sorot Zona Imbalance (FVG)
+input color  InpFVGColor        = C'180,0,180';  // Warna zona Imbalance / FVG (Magenta)
+
 input group "=== Momentum Indicator ==="
 input int    InpEarlySignalSeconds  = 10;    // Detik Early Signal Momentum (0=Off)
 input bool   InpEnableAutoMomentum  = false; // Enable Auto Trading Candle Momentum
@@ -930,6 +934,38 @@ bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, in
    return true;
   }
 
+// ---- FVG Filter: Check FVG at breakout candle ----
+bool CheckFVGAndTrade(int shift, int zone_idx)
+  {
+   if(!InpFilterFVG) return false;
+   if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
+   if(!g_zones[zone_idx].active) return false;
+   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
+
+   bool isDemand = g_zones[zone_idx].is_demand;
+   bool hasFVG = false;
+   
+   if(isDemand) {
+      double fvg_top = iLow(_Symbol, _Period, shift);
+      double fvg_btm = iHigh(_Symbol, _Period, shift+2);
+      if(fvg_top > fvg_btm) hasFVG = true;
+   } else {
+      double fvg_top = iLow(_Symbol, _Period, shift+2);
+      double fvg_btm = iHigh(_Symbol, _Period, shift);
+      if(fvg_top > fvg_btm) hasFVG = true;
+   }
+
+   if(hasFVG) {
+      ObjectSetInteger(0, g_zones[zone_idx].rect_name, OBJPROP_COLOR, InpFVGColor);
+      ObjectSetInteger(0, g_zones[zone_idx].lbl_name, OBJPROP_COLOR, InpFVGColor);
+      ObjectSetInteger(0, g_zones[zone_idx].lbl_top, OBJPROP_COLOR, InpFVGColor);
+      ObjectSetInteger(0, g_zones[zone_idx].lbl_btm, OBJPROP_COLOR, InpFVGColor);
+      ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
+      return true;
+   }
+   return false;
+  }
+
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
 void ProcessBar(int shift)
   {
@@ -970,6 +1006,10 @@ void ProcessBar(int shift)
         {
          DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
          g_pending_bull_zone_idx = g_zone_count - 1; // Track exact zone index
+         
+         // Trigger FVG check immediately
+         CheckFVGAndTrade(shift, g_pending_bull_zone_idx);
+         
          // Record fibo origin: Swing Low before BOS → will wait for new Pivot High
          g_fibo_origin_bullish  = g_last_pl;
          g_fibo_origin_bull_time = g_last_pl_time;
@@ -991,6 +1031,10 @@ void ProcessBar(int shift)
         {
          DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
          g_pending_bear_zone_idx = g_zone_count - 1; // Track exact zone index
+         
+         // Trigger FVG check immediately
+         CheckFVGAndTrade(shift, g_pending_bear_zone_idx);
+         
          // Record fibo origin: Swing High before BOS → will wait for new Pivot Low
          g_fibo_origin_bearish  = g_last_ph;
          g_fibo_origin_bear_time = g_last_ph_time;

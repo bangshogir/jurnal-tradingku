@@ -92,7 +92,11 @@ input color   InpBOSBull         = clrDodgerBlue;
 input color   InpBOSBear         = clrOrangeRed;
 input color   InpGoldenZoneColor = clrGold;
 
-input string  _s4_="=== Momentum Indicator ===";
+input string  _s4_="=== Imbalance & FVG Filter ===";
+input bool    InpFilterFVG       = true;
+input color   InpFVGColor        = C'180,0,180'; // Magenta
+
+input string  _s5_="=== Momentum Indicator ===";
 input int     InpEarlySignalSeconds = 10;
 input bool    InpEnableAutoMomentum = false;
 input double  InpBodyPercentage     = 0.75;
@@ -611,6 +615,30 @@ bool CheckFiboAndTrade(double fibo_low,double fibo_high,datetime from_time,int z
    return true;
 }
 
+bool CheckFVGAndTrade(int shift,int zone_idx){
+   if(!InpFilterFVG) return false;
+   if(zone_idx<0||zone_idx>=g_zone_count) return false;
+   if(!g_zones[zone_idx].active) return false;
+   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
+   bool isDemand=g_zones[zone_idx].is_demand;
+   bool hasFVG=false;
+   if(isDemand){
+      double fvg_top=iLow(Symbol(),Period(),shift);
+      double fvg_btm=iHigh(Symbol(),Period(),shift+2);
+      if(fvg_top>fvg_btm) hasFVG=true;
+   }else{
+      double fvg_top=iLow(Symbol(),Period(),shift+2);
+      double fvg_btm=iHigh(Symbol(),Period(),shift);
+      if(fvg_top>fvg_btm) hasFVG=true;
+   }
+   if(hasFVG){
+      ObjectSetInteger(0,g_zones[zone_idx].rect_name,OBJPROP_COLOR,InpFVGColor);
+      ExecuteAutoTrade(g_zones[zone_idx].is_demand,g_zones[zone_idx].top,g_zones[zone_idx].btm,g_zones[zone_idx].start_time);
+      return true;
+   }
+   return false;
+}
+
 void ProcessBar(int shift){
    g_old_last_ph=g_last_ph; g_old_last_pl=g_last_pl;
    double ph=GetPivotHigh(InpPivotLB,shift);
@@ -627,14 +655,24 @@ void ProcessBar(int shift){
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
       g_fibo_bull_pending=false; g_pending_bull_zone_idx=-1;
       int base=FindDemandBase(shift);
-      if(base!=-1){DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));g_pending_bull_zone_idx=g_zone_count-1;g_fibo_origin_bullish=g_last_pl;g_fibo_origin_bull_time=g_last_pl_time;g_fibo_bull_pending=true;}
+      if(base!=-1){
+         DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+         g_pending_bull_zone_idx=g_zone_count-1;
+         CheckFVGAndTrade(shift,g_pending_bull_zone_idx);
+         g_fibo_origin_bullish=g_last_pl;g_fibo_origin_bull_time=g_last_pl_time;g_fibo_bull_pending=true;
+      }
    }
    if(bear_bos){
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(Symbol(),Period(),shift));
       g_fibo_bear_pending=false; g_pending_bear_zone_idx=-1;
       int base=FindSupplyBase(shift);
-      if(base!=-1){DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));g_pending_bear_zone_idx=g_zone_count-1;g_fibo_origin_bearish=g_last_ph;g_fibo_origin_bear_time=g_last_ph_time;g_fibo_bear_pending=true;}
+      if(base!=-1){
+         DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+         g_pending_bear_zone_idx=g_zone_count-1;
+         CheckFVGAndTrade(shift,g_pending_bear_zone_idx);
+         g_fibo_origin_bearish=g_last_ph;g_fibo_origin_bear_time=g_last_ph_time;g_fibo_bear_pending=true;
+      }
    }
    if(g_fibo_bull_pending&&ph>0&&g_last_ph_time>g_fibo_origin_bull_time)
       if(CheckFiboAndTrade(g_fibo_origin_bullish,g_last_ph,g_fibo_origin_bull_time,g_pending_bull_zone_idx))
