@@ -354,7 +354,7 @@ public:
    void      OnInput() { UpdateLot(); }
    void      UpdateStats() { m_lbl_pair.Text(_Symbol); UpdateBalance(); }
 
-   CRiskPanel() { m_cl_active = false; m_risk_in_percent = true; }
+   CRiskPanel() { m_cl_active = false; m_risk_in_percent = false; }
    virtual bool  Create(const long chart, const string name, const int sw, const int x1, const int y1, const int x2, const int y2) {
       if(!CAppDialog::Create(chart, name, sw, x1, y1, x2, y2)) return false;
 
@@ -378,9 +378,9 @@ public:
       y += ch + 15;
 
       // Row 3: Risk
-      if(!MkLabel(m_lbl_risk, "LR", "Risk (%):",  lx, y, ex-gap, y+ch)) return false;
-      if(!MkEdit(m_edt_risk,  "ER", "1.0",       ex, y, rx-50, y+ch)) return false;
-      if(!MkButton(m_btn_risk_mode, "BRM", " % ", rx-45, y, rx, y+ch)) return false;
+      if(!MkLabel(m_lbl_risk, "LR", "Risk ($):",  lx, y, ex-gap, y+ch)) return false;
+      if(!MkEdit(m_edt_risk,  "ER", "0.5",       ex, y, rx-50, y+ch)) return false;
+      if(!MkButton(m_btn_risk_mode, "BRM", " $ ", rx-45, y, rx, y+ch)) return false;
       y += rh;
 
       // Row 4: Entry Price

@@ -321,7 +321,7 @@ public:
    void OnInput(){UpdateLot();}
    void UpdateStats(){m_lbl_pair.Text(Symbol());UpdateBalance();}
 
-   CRiskPanel(){m_cl_active=false;m_risk_in_percent=true;}
+   CRiskPanel(){m_cl_active=false;m_risk_in_percent=false;}
    virtual bool Create(const long chart,const string name,const int sw,const int x1,const int y1,const int x2,const int y2){
       if(!CAppDialog::Create(chart,name,sw,x1,y1,x2,y2)) return false;
       int lx=18,rx=267,rh=30,ch=22,bh=28,y=15,lbl=75,gap=12,ex=lx+lbl+gap;
@@ -330,9 +330,9 @@ public:
       y+=ch+5;
       if(!MkLabel(m_lbl_balance,"Bal","Balance: --",lx,y,rx,y+ch,8)) return false;
       y+=ch+15;
-      if(!MkLabel(m_lbl_risk,"LR","Risk (%):",lx,y,ex-gap,y+ch)) return false;
-      if(!MkEdit(m_edt_risk,"ER","1.0",ex,y,rx-50,y+ch)) return false;
-      if(!MkButton(m_btn_risk_mode,"BRM"," % ",rx-45,y,rx,y+ch)) return false;
+      if(!MkLabel(m_lbl_risk,"LR","Risk ($):",lx,y,ex-gap,y+ch)) return false;
+      if(!MkEdit(m_edt_risk,"ER","0.5",ex,y,rx-50,y+ch)) return false;
+      if(!MkButton(m_btn_risk_mode,"BRM"," $ ",rx-45,y,rx,y+ch)) return false;
       y+=rh;
       if(!MkLabel(m_lbl_entry,"LE","Entry:",lx,y,ex-gap,y+ch)) return false;
       if(!MkEdit(m_edt_entry,"EE","",ex,y,rx,y+ch)) return false;
