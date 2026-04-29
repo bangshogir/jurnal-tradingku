@@ -87,9 +87,10 @@ input bool    InpShowBOS         = true;
 input color   InpDemandColor     = C'0,160,0';
 input color   InpSupplyColor     = C'190,0,0';
 input bool    InpShowMitigated   = true;
-input color   InpMitColor        = clrGray;
-input color   InpBOSBull         = clrDodgerBlue;
-input color   InpBOSBear         = clrOrangeRed;
+input color   InpMitColor        = clrGray;         // Warna Border Zona Termitigasi
+input bool    InpShowZones       = true;            // Tampilkan Zona SnD Aktif
+input color   InpBOSBull         = clrDodgerBlue;   // Warna Bullish BOS
+input color   InpBOSBear         = clrOrangeRed;    // Warna Bearish BOS
 input color   InpGoldenZoneColor = clrGold;
 
 input string  _s4_="=== Imbalance & FVG Filter ===";
@@ -511,17 +512,19 @@ void PollTradeEvents(){
 //=====================================================================
 void DrawZone(bool is_demand,double top,double btm,datetime start_time){
    if(g_zone_count>=MAX_ZONES) return;
-   color col=is_demand?InpDemandColor:InpSupplyColor;
+   color col_use=is_demand?InpDemandColor:InpSupplyColor;
    string uid=NextID(),rname="SnD_Z_"+uid,lname="SnD_ZL_"+uid;
-   datetime future=D'2099.12.31';
-   if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,future,btm))
-      {ObjectSetInteger(0,rname,OBJPROP_COLOR,col);ObjectSetInteger(0,rname,OBJPROP_FILL,true);ObjectSetInteger(0,rname,OBJPROP_BACK,true);ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);}
-   if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-      {ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply");ObjectSetInteger(0,lname,OBJPROP_COLOR,col);ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER);ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,lname,OBJPROP_BACK,true);}
-   string ptop="SnD_PT_"+uid,pbtm="SnD_PB_"+uid;
-   if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)){ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,Digits));ObjectSetInteger(0,ptop,OBJPROP_COLOR,col);ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER);ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,ptop,OBJPROP_BACK,true);}
-   if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)){ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,Digits));ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col);ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER);ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,pbtm,OBJPROP_BACK,true);}
-   g_zones[g_zone_count].rect_name=rname;g_zones[g_zone_count].lbl_name=lname;g_zones[g_zone_count].lbl_top=ptop;g_zones[g_zone_count].lbl_btm=pbtm;
+   if(InpShowZones)
+     {
+      if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
+        { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
+      if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
+        { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
+      string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
+      if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+      if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+     }
+   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top="SnD_PT_"+uid; g_zones[g_zone_count].lbl_btm="SnD_PB_"+uid;
    g_zones[g_zone_count].is_demand=is_demand;g_zones[g_zone_count].top=top;g_zones[g_zone_count].btm=btm;g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true; g_zone_count++;
 }
