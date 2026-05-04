@@ -64,7 +64,7 @@ input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 
 input group "=== Ping-Pong Strategy ==="
-input bool   InpEnablePingPong    = true;    // Enable Ping-Pong (Sideways) Scalping
+input bool   InpEnablePingPong    = false;   // Enable Ping-Pong (Sideways) Scalping [DITUNDA]
 input color  InpPPBoxColor        = C'30,30,30'; // Warna background area Ping-Pong
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
