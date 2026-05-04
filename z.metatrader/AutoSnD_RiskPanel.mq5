@@ -1056,7 +1056,8 @@ void PingPongTrader(int shift) {
     if(g_last_ph > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
            if(g_zones[i].active && !g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-               if(g_last_ph <= g_zones[i].top && g_last_ph >= g_zones[i].btm) {
+               // A ping-pong roof (Supply DBD) is valid if the pivot high touched or pierced it
+               if(g_last_ph >= g_zones[i].btm) {
                    found_atap = true;
                    atap_top = g_zones[i].top;
                    break;
@@ -1070,7 +1071,8 @@ void PingPongTrader(int shift) {
     if(g_last_pl > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
            if(g_zones[i].active && g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-              if(g_last_pl >= g_zones[i].btm && g_last_pl <= g_zones[i].top) {
+              // A ping-pong floor (Demand RBR) is valid if the pivot low touched or pierced it
+              if(g_last_pl <= g_zones[i].top) {
                   found_lantai = true;
                   lantai_btm = g_zones[i].btm;
                   break;
