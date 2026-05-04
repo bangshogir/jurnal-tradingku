@@ -57,6 +57,7 @@ input color  InpFVGColor        = C'180,0,180';  // Warna zona Imbalance / FVG (
 input group "=== Momentum Indicator ==="
 input int    InpEarlySignalSeconds  = 10;    // Detik Early Signal Momentum (0=Off)
 input bool   InpEnableAutoMomentum  = false; // Enable Auto Trading Candle Momentum
+input double InpMomentumRR        = 0.61;    // RR Ratio khusus Momentum (Jika > 0)
 input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
@@ -842,8 +843,8 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
       return;
      }
    
-   // TP berdasarkan RR Ratio dari panel
-   double mult = StringToDouble(ExtPanel.m_edt_ratio.Text());
+   // TP berdasarkan input RR khusus (jika disetel > 0), jika tidak gunakan dari panel
+   double mult = InpMomentumRR > 0 ? InpMomentumRR : StringToDouble(ExtPanel.m_edt_ratio.Text());
    if(mult <= 0) mult = 2.0;
    double diff = MathAbs(entry - stopLoss);
    double tp   = isBullish
