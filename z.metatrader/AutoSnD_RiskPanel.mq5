@@ -1423,6 +1423,19 @@ int OnInit()
    g_atr_handle = iATR(_Symbol, _Period, InpATRPeriod);
    if(g_atr_handle == INVALID_HANDLE) { Print("Gagal inisialisasi ATR untuk Momentum"); return INIT_FAILED; }
    
+   // Reset semua state zona agar tidak ada "hantu" dari timeframe sebelumnya
+   g_zone_count = 0;
+   g_obj_id = 0;
+   g_last_ph = 0; g_last_ph_time = 0;
+   g_last_pl = 0; g_last_pl_time = 0;
+   g_old_last_ph = 0; g_old_last_pl = 0;
+   g_marked_ph_time = 0; g_marked_pl_time = 0;
+   g_pp_active = false; g_pp_top = 0; g_pp_btm = 0;
+   g_pp_traded_sell = false; g_pp_traded_buy = false;
+   g_fibo_bull_pending = false; g_fibo_bear_pending = false;
+   g_pending_bull_zone_idx = -1; g_pending_bear_zone_idx = -1;
+   g_resync_done = false;
+   
    ScanHistory(); // Scan full history using SnD_Zone logic
    ScanHistoricalMomentum(); // Scan Momentum indicators
    
