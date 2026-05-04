@@ -38,9 +38,14 @@ input int     InpHistoryBars    = 600;     // Jumlah Bar Histori Discan
 input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
-input bool   InpShowMitigated  = true;         // Tampilkan Zona Termitigasi
-input color  InpMitColor       = clrGray;      // Warna Border Zona Termitigasi
-input bool   InpShowZones      = true;         // Tampilkan Zona SnD Aktif
+input bool   InpShowMitigated  = true;          // Tampilkan Zona Termitigasi
+input color  InpMitColor       = clrGray;       // Warna Border Zona Termitigasi
+input bool   InpShowRbdDbr     = true;          // Tampilkan Zona Reversal (RBD/DBR)
+input bool   InpAutoTradeRbdDbr= true;          // Auto-Trade Zona Reversal
+input bool   InpShowRbrDbd     = true;          // Tampilkan Zona Continuation (RBR/DBD)
+input bool   InpAutoTradeRbrDbd= false;         // Auto-Trade Zona Continuation
+input color  InpContColor      = clrLightBlue;  // Warna Border Zona Continuation
+input int    InpBaseMaxCandles = 3;             // Max Base Candles utk Continuation
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
 input color  InpGoldenZoneColor= clrGold;       // Warna Zona SnD di area Golden Fibo
@@ -59,6 +64,8 @@ input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
+enum ENUM_ZONE_TYPE { ZONE_RBD_DBR, ZONE_RBR_DBD };
+
 struct ZoneData
   {
    string   rect_name;
@@ -70,6 +77,7 @@ struct ZoneData
    double   btm;
    datetime start_time;
    bool     active;
+   ENUM_ZONE_TYPE type;
   };
 
 #define MAX_ZONES    300
@@ -692,24 +700,31 @@ void ResyncHistory()
 //=====================================================================
 
 // ---- Zone Drawing (from SnD_Zone.mq5) ----
-void DrawZone(bool is_demand, double top, double btm, datetime start_time)
+void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_ZONE_TYPE ztype=ZONE_RBD_DBR)
   {
    if(g_zone_count >= MAX_ZONES) return;
-   color col_use = is_demand ? InpDemandColor : InpSupplyColor;
+   
+   bool show_visual = (ztype == ZONE_RBD_DBR) ? InpShowRbdDbr : InpShowRbrDbd;
+   color col_use = (ztype == ZONE_RBD_DBR) ? (is_demand ? InpDemandColor : InpSupplyColor) : InpContColor;
+   bool  fill_box = (ztype == ZONE_RBD_DBR) ? true : false;
+   string stype = (ztype == ZONE_RBD_DBR) ? (is_demand?"Origin Demand":"Origin Supply") : (is_demand?"Demand (RBR)":"Supply (DBD)");
+   
    string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
-   if(InpShowZones)
+   if(show_visual)
      {
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
-        { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
+        { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,fill_box); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
       if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-        { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
+        { ObjectSetString(0,lname,OBJPROP_TEXT,stype); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
       string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
       if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
       if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
      }
-   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top="SnD_PT_"+uid; g_zones[g_zone_count].lbl_btm="SnD_PB_"+uid;
+   
+   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PT_"+uid : ""; g_zones[g_zone_count].lbl_btm=show_visual ? "SnD_PB_"+uid : "";
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true;
+   g_zones[g_zone_count].type=ztype;
    g_zone_count++;
   }
 
@@ -781,12 +796,13 @@ int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++
 
 void CheckMitigation(int shift)
   {
-   double l=iLow(_Symbol,_Period,shift), h=iHigh(_Symbol,_Period,shift);
+   double c=iClose(_Symbol,_Period,shift);
    datetime bt=iTime(_Symbol,_Period,shift);
    for(int i=g_zone_count-1;i>=0;i--)
      {
       if(!g_zones[i].active||bt<=g_zones[i].start_time) continue;
-      bool mit=g_zones[i].is_demand?(l<=g_zones[i].top):(h>=g_zones[i].btm);
+      // Mitigasi HANYA terjadi (zona batal) jika penutupan lilin (Close) menjebol dinding belakang zona
+      bool mit=g_zones[i].is_demand?(c < g_zones[i].btm):(c > g_zones[i].top);
       if(mit) MitigateZone(i,bt);
      }
   }
@@ -1071,6 +1087,7 @@ void ProcessBar(int shift)
      }
 
    CheckMitigation(shift);
+   CheckContinuationZone(shift);
   }
 
 void ScanHistory()
@@ -1183,6 +1200,59 @@ void ScanHistoricalMomentum() {
    }
 }
 
+void CheckContinuationZone(int shift) {
+   if(!InpShowRbrDbd && !InpAutoTradeRbrDbd) return;
+   
+   bool is_bull_rally = IsBullishMomentum(shift);
+   bool is_bear_drop  = IsBearishMomentum(shift);
+   if(!is_bull_rally && !is_bear_drop) return;
+   
+   double leg_out_range = iHigh(_Symbol, _Period, shift) - iLow(_Symbol, _Period, shift);
+   int best_base_start = -1;
+   int best_base_end = -1;
+   
+   for(int k=1; k<=InpBaseMaxCandles; k++) {
+      int idx_leg_in = shift + k + 1;
+      bool leg_in_valid = is_bull_rally ? (iClose(_Symbol,_Period,idx_leg_in) > iOpen(_Symbol,_Period,idx_leg_in))
+                                        : (iClose(_Symbol,_Period,idx_leg_in) < iOpen(_Symbol,_Period,idx_leg_in));
+      if(!leg_in_valid) continue;
+      
+      bool valid_base = true;
+      double max_h = 0, min_l = 999999;
+      for(int b=1; b<=k; b++) {
+         int b_idx = shift + b;
+         double h = iHigh(_Symbol, _Period, b_idx);
+         double l = iLow(_Symbol, _Period, b_idx);
+         if(h > max_h) max_h = h;
+         if(l < min_l) min_l = l;
+         double rng = h - l;
+         if(rng > leg_out_range * 0.6) { valid_base = false; break; }
+      }
+      if(valid_base && (max_h - min_l) < leg_out_range * 1.5) {
+         best_base_start = shift + k;
+         best_base_end = shift + 1;
+         break;
+      }
+   }
+   
+   if(best_base_end != -1) {
+      double top = 0, btm = 999999;
+      for(int i=best_base_end; i<=best_base_start; i++) {
+         if(iHigh(_Symbol, _Period, i) > top) top = iHigh(_Symbol, _Period, i);
+         if(iLow(_Symbol, _Period, i) < btm) btm = iLow(_Symbol, _Period, i);
+      }
+      datetime st = iTime(_Symbol, _Period, best_base_start);
+      for(int z=0; z<g_zone_count; z++) {
+         if(g_zones[z].start_time == st && g_zones[z].type == ZONE_RBR_DBD) return;
+      }
+      
+      DrawZone(is_bull_rally, top, btm, st, ZONE_RBR_DBD);
+      
+      if(!g_is_scanning_history && InpAutoTradeRbrDbd) {
+         ExecuteAutoTrade(is_bull_rally, top, btm, st);
+      }
+   }
+}
 
 //=====================================================================
 // [7] EVENT HANDLERS
