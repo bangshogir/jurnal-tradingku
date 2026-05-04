@@ -718,7 +718,7 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
       double center_price = (top + btm) / 2.0;
       string pinfo="SnD_PI_"+uid;
       string price_txt = DoubleToString(top,_Digits) + " / " + DoubleToString(btm,_Digits);
-      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,start_time,center_price)) { ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_LEFT); ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); }
+      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,start_time,center_price)) { ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); }
      }
    
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PI_"+uid : ""; g_zones[g_zone_count].lbl_btm="";
@@ -763,12 +763,12 @@ void MitigateZone(int idx, datetime t)
 
 void UpdateZoneLabelsTime(datetime t)
   {
-   // Menempatkan teks secara real-time di kanan dekat skala harga (ruang kosong depan candle)
+   // Teks harga dikalkulasi posisinya agar selalu terpusat di tengah-tengah zona yang membentang aktif
    for(int i=0;i<g_zone_count;i++) 
-      if(g_zones[i].active) 
+      if(g_zones[i].active && g_zones[i].lbl_top != "") 
         { 
-         ObjectMove(0,g_zones[i].lbl_top,0,t,g_zones[i].top); 
-         ObjectMove(0,g_zones[i].lbl_btm,0,t,g_zones[i].btm); 
+         datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
+         ObjectMove(0,g_zones[i].lbl_top,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0); 
         }
   }
 
