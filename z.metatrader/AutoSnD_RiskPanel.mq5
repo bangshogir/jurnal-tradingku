@@ -715,12 +715,13 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
      {
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
         { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,fill_box); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
-      string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-      if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LEFT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-      if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+      double center_price = (top + btm) / 2.0;
+      string pinfo="SnD_PI_"+uid;
+      string price_txt = DoubleToString(top,_Digits) + " / " + DoubleToString(btm,_Digits);
+      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,start_time,center_price)) { ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); ObjectSetInteger(0,pinfo,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_LEFT); ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pinfo,OBJPROP_BACK,true); }
      }
    
-   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PT_"+uid : ""; g_zones[g_zone_count].lbl_btm=show_visual ? "SnD_PB_"+uid : "";
+   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PI_"+uid : ""; g_zones[g_zone_count].lbl_btm="";
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true;
    g_zones[g_zone_count].type=ztype;
