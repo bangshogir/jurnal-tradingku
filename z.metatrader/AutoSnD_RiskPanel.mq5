@@ -707,7 +707,7 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
    
    bool show_visual = (ztype == ZONE_RBD_DBR) ? InpShowRbdDbr : InpShowRbrDbd;
    color col_use = (ztype == ZONE_RBD_DBR) ? (is_demand ? InpDemandColor : InpSupplyColor) : InpContColor;
-   bool  fill_box = (ztype == ZONE_RBD_DBR) ? true : false;
+   bool  fill_box = true;
    string stype = (ztype == ZONE_RBD_DBR) ? (is_demand?"Origin Demand":"Origin Supply") : (is_demand?"Demand (RBR)":"Supply (DBD)");
    
    string uid=NextID(), rname="SnD_Z_"+uid;
