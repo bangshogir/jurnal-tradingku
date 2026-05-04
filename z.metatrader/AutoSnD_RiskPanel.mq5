@@ -62,6 +62,10 @@ input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
+
+input group "=== Ping-Pong Strategy ==="
+input bool   InpEnablePingPong    = true;    // Enable Ping-Pong (Sideways) Scalping
+input color  InpPPBoxColor        = C'30,30,30'; // Warna background area Ping-Pong
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
@@ -95,6 +99,21 @@ double   g_old_last_ph  = 0;
 double   g_old_last_pl  = 0;
 datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
+
+// Ping-Pong State
+double   g_pp_top     = 0;
+double   g_pp_btm     = 0;
+double   g_pp_q75     = 0;
+double   g_pp_q25     = 0;
+double   g_pp_q50     = 0;
+datetime g_pp_start = 0;
+bool     g_pp_active    = false;
+string   g_pp_rect    = "PP_RECT";
+string   g_pp_lbl_top = "PP_LBL_TOP";
+string   g_pp_lbl_btm = "PP_LBL_BTM";
+string   g_pp_lbl_mid = "PP_LBL_MID";
+bool     g_pp_traded_sell = false;
+bool     g_pp_traded_buy  = false;
 
 datetime g_last_processed_bar = 0;
 
@@ -877,6 +896,32 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
      }
   }
 
+void ExecutePingPongTrade(bool isBuy, double entryPrice, double stopLoss, double tpPrice)
+  {
+   if(g_is_scanning_history) return;
+   double riskAmount = ExtPanel.AdjRisk();
+   if(riskAmount <= 0) return;
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   stopLoss = isBuy ? stopLoss - InpBufferPoints*pt : stopLoss + InpBufferPoints*pt;
+   entryPrice = NormalizeDouble(entryPrice, digits);
+   stopLoss = NormalizeDouble(stopLoss, digits);
+   tpPrice = NormalizeDouble(tpPrice, digits);
+   double lot = CalcLotSize(riskAmount, entryPrice, stopLoss, _Symbol);
+   if(lot <= 0) return;
+   
+   string comm = "SND_PP";
+   bool result = isBuy
+                 ? ExtTrade.Buy (lot, _Symbol, entryPrice, stopLoss, tpPrice, comm)
+                 : ExtTrade.Sell(lot, _Symbol, entryPrice, stopLoss, tpPrice, comm);
+   if(result)
+     {
+      string dir = isBuy ? "BUY" : "SELL";
+      Print("PingPong Executed: ", dir, " Lot:", lot, " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
+      ExtPanel.SetStatus("PingPong " + dir + " | Lot: " + DoubleToString(lot,2));
+     }
+  }
+
 // ---- Execution ----
 void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
   {
@@ -984,6 +1029,96 @@ bool CheckFVGAndTrade(int shift, int zone_idx)
    return false;
   }
 
+// ---- Ping-Pong Logic ----
+void DrawPingPongBox() {
+    if(!InpEnablePingPong) return;
+    ObjectDelete(0, g_pp_rect);
+    if(ObjectCreate(0, g_pp_rect, OBJ_RECTANGLE, 0, g_pp_start, g_pp_top, D'2099.12.31', g_pp_btm)) {
+        ObjectSetInteger(0, g_pp_rect, OBJPROP_COLOR, InpPPBoxColor);
+        ObjectSetInteger(0, g_pp_rect, OBJPROP_FILL, true);
+        ObjectSetInteger(0, g_pp_rect, OBJPROP_BACK, true);
+        ObjectSetInteger(0, g_pp_rect, OBJPROP_SELECTABLE, false);
+        ObjectSetString(0, g_pp_rect, OBJPROP_TOOLTIP, "Ping-Pong Area | 75% Sell | 25% Buy");
+    }
+    ObjectDelete(0, "PP_MID_LINE");
+    if(ObjectCreate(0, "PP_MID_LINE", OBJ_HLINE, 0, 0, g_pp_q50)) {
+        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_COLOR, clrDodgerBlue);
+        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_STYLE, STYLE_DASH);
+        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_SELECTABLE, false);
+    }
+}
+
+void PingPongTrader(int shift) {
+    if(!InpEnablePingPong) return;
+    
+    bool found_atap = false;
+    double atap_top = 0;
+    if(g_last_ph > 0) {
+       for(int i=g_zone_count-1; i>=0; i--) {
+           if(g_zones[i].active && !g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+               if(g_last_ph <= g_zones[i].top && g_last_ph >= g_zones[i].btm) {
+                   found_atap = true;
+                   atap_top = g_zones[i].top;
+                   break;
+               }
+           }
+       }
+    }
+    
+    bool found_lantai = false;
+    double lantai_btm = 0;
+    if(g_last_pl > 0) {
+       for(int i=g_zone_count-1; i>=0; i--) {
+           if(g_zones[i].active && g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+              if(g_last_pl >= g_zones[i].btm && g_last_pl <= g_zones[i].top) {
+                  found_lantai = true;
+                  lantai_btm = g_zones[i].btm;
+                  break;
+              }
+           }
+       }
+    }
+    
+    if(found_atap && found_lantai) {
+        if(!g_pp_active || g_pp_top != atap_top || g_pp_btm != lantai_btm) {
+            g_pp_active = true;
+            g_pp_top = atap_top;
+            g_pp_btm = lantai_btm;
+            g_pp_start = iTime(_Symbol, _Period, shift);
+            double range = g_pp_top - g_pp_btm;
+            g_pp_q75 = g_pp_btm + range * 0.75;
+            g_pp_q25 = g_pp_btm + range * 0.25;
+            g_pp_q50 = g_pp_btm + range * 0.50;
+            g_pp_traded_sell = false;
+            g_pp_traded_buy  = false;
+            DrawPingPongBox();
+        }
+    }
+    
+    if(!g_pp_active) return;
+    
+    double cls = iClose(_Symbol, _Period, shift);
+    if(cls > g_pp_top || cls < g_pp_btm) {
+        g_pp_active = false;
+        ObjectDelete(0, g_pp_rect);
+        ObjectDelete(0, "PP_MID_LINE");
+        return;
+    }
+    
+    if(g_is_scanning_history) return;
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    
+    if(bid >= g_pp_q75 && bid <= g_pp_top && !g_pp_traded_sell) {
+        g_pp_traded_sell = true;
+        ExecutePingPongTrade(false, bid, g_pp_top, g_pp_q50);
+    }
+    if(ask <= g_pp_q25 && ask >= g_pp_btm && !g_pp_traded_buy) {
+        g_pp_traded_buy = true;
+        ExecutePingPongTrade(true, ask, g_pp_btm, g_pp_q50);
+    }
+}
+
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
 void ProcessBar(int shift)
   {
@@ -1086,6 +1221,7 @@ void ProcessBar(int shift)
 
    CheckMitigation(shift);
    CheckContinuationZone(shift);
+   PingPongTrader(shift);
   }
 
 void ScanHistory()
