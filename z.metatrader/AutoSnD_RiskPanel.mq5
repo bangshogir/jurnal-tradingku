@@ -1051,14 +1051,23 @@ void DrawPingPongBox() {
 void PingPongTrader(int shift) {
     if(!InpEnablePingPong) return;
     
-    // Cari ATAP: zona Supply aktif terdekat yang memantulkan Pivot High
+    // Hitung jumlah zona continuation aktif untuk debugging
+    int cont_supply = 0, cont_demand = 0;
+    for(int c=0; c<g_zone_count; c++) {
+       if(g_zones[c].active && g_zones[c].type == ZONE_RBR_DBD) {
+          if(g_zones[c].is_demand) cont_demand++; else cont_supply++;
+       }
+    }
+    
+    // Cari ATAP: zona Supply DBD (Continuation) aktif yang memantulkan Pivot High
     bool found_atap = false;
     double atap_top = 0;
     if(g_last_ph > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
-           // Semua zona Supply aktif (baik Reversal maupun Continuation) bisa jadi controller
-           if(g_zones[i].active && !g_zones[i].is_demand) {
-               if(g_last_ph >= g_zones[i].btm) {
+           if(g_zones[i].active && !g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+               // Pivot High menyentuh atau menembus zona Supply (toleransi 1x tinggi zona)
+               double zoneH = g_zones[i].top - g_zones[i].btm;
+               if(g_last_ph >= g_zones[i].btm && g_last_ph <= g_zones[i].top + zoneH) {
                    found_atap = true;
                    atap_top = g_zones[i].top;
                    break;
@@ -1067,19 +1076,28 @@ void PingPongTrader(int shift) {
        }
     }
     
-    // Cari LANTAI: zona Demand aktif terdekat yang memantulkan Pivot Low
+    // Cari LANTAI: zona Demand RBR (Continuation) aktif yang memantulkan Pivot Low
     bool found_lantai = false;
     double lantai_btm = 0;
     if(g_last_pl > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
-           if(g_zones[i].active && g_zones[i].is_demand) {
-              if(g_last_pl <= g_zones[i].top) {
+           if(g_zones[i].active && g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+              double zoneH = g_zones[i].top - g_zones[i].btm;
+              if(g_last_pl <= g_zones[i].top && g_last_pl >= g_zones[i].btm - zoneH) {
                   found_lantai = true;
                   lantai_btm = g_zones[i].btm;
                   break;
               }
            }
        }
+    }
+    
+    // Debug: cetak status di tab Experts agar mudah dipantau
+    if(!g_is_scanning_history && shift <= 1) {
+       Print("[PP] ContZones: Supply=", cont_supply, " Demand=", cont_demand,
+             " | PH=", g_last_ph, " PL=", g_last_pl,
+             " | Atap=", found_atap, "(", atap_top, ")",
+             " Lantai=", found_lantai, "(", lantai_btm, ")");
     }
     
     if(found_atap && found_lantai) {
