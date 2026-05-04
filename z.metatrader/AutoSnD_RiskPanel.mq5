@@ -710,19 +710,17 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
    bool  fill_box = (ztype == ZONE_RBD_DBR) ? true : false;
    string stype = (ztype == ZONE_RBD_DBR) ? (is_demand?"Origin Demand":"Origin Supply") : (is_demand?"Demand (RBR)":"Supply (DBD)");
    
-   string uid=NextID(), rname="SnD_Z_"+uid, lname="SnD_ZL_"+uid;
+   string uid=NextID(), rname="SnD_Z_"+uid;
    if(show_visual)
      {
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
         { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,fill_box); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
-      if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-        { ObjectSetString(0,lname,OBJPROP_TEXT,stype); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
       string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-      if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-      if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
+      if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_RIGHT_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
+      if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
      }
    
-   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PT_"+uid : ""; g_zones[g_zone_count].lbl_btm=show_visual ? "SnD_PB_"+uid : "";
+   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PT_"+uid : ""; g_zones[g_zone_count].lbl_btm=show_visual ? "SnD_PB_"+uid : "";
    g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
    g_zones[g_zone_count].active=true;
    g_zones[g_zone_count].type=ztype;
@@ -767,11 +765,8 @@ void UpdateZoneLabelsTime(datetime t)
    for(int i=0;i<g_zone_count;i++) 
       if(g_zones[i].active) 
         { 
-         datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
-         // Move lname to exact middle of the box (price midpoint)
-         ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0);
-         ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top); 
-         ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm); 
+         ObjectMove(0,g_zones[i].lbl_top,0,t,g_zones[i].top); 
+         ObjectMove(0,g_zones[i].lbl_btm,0,t,g_zones[i].btm); 
         }
   }
 
