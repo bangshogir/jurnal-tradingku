@@ -719,10 +719,19 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
      {
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
         { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,fill_box); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
-      double center_price = (top + btm) / 2.0;
+      double center_price = top - ((top - btm) / 2.0); // Kalkulasi presisi titik tengah secara vertikal
+      datetime right_edge = TimeCurrent();
+      datetime mid_time = (datetime)(((long)start_time + (long)right_edge) / 2); // Kalkulasi titik tengah secara horizontal
       string pinfo="SnD_PI_"+uid;
       string price_txt = DoubleToString(top,_Digits) + " / " + DoubleToString(btm,_Digits);
-      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,start_time,center_price)) { ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,7); ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); }
+      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,mid_time,center_price)) { 
+          ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); 
+          ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); 
+          ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,8); 
+          ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER); // Memaku posisi jangkar teks TEPAT di titik pusatnya
+          ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); 
+          ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); 
+      }
      }
    
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PI_"+uid : ""; g_zones[g_zone_count].lbl_btm="";
@@ -772,7 +781,8 @@ void UpdateZoneLabelsTime(datetime t)
       if(g_zones[i].active && g_zones[i].lbl_top != "") 
         { 
          datetime mid = (datetime)(((long)g_zones[i].start_time + (long)t) / 2);
-         ObjectMove(0,g_zones[i].lbl_top,0,mid,(g_zones[i].top + g_zones[i].btm)/2.0); 
+         double center_price = g_zones[i].top - ((g_zones[i].top - g_zones[i].btm) / 2.0);
+         ObjectMove(0,g_zones[i].lbl_top,0,mid,center_price); 
         }
   }
 
@@ -1288,6 +1298,7 @@ int OnInit()
    ScanHistoricalMomentum(); // Scan Momentum indicators
    
    g_last_processed_bar = iTime(_Symbol, _Period, 0);
+   UpdateZoneLabelsTime(TimeCurrent()); // Posisikan label teks presisi di tengah-tengah seketika EA dinyalakan
    
    Print("AutoSnD EA v3.00 Ready.");
    return INIT_SUCCEEDED;
