@@ -799,8 +799,8 @@ int FindDemandBase(datetime pivot_time, double &top, double &btm) {
     // SMC: Tipe DBR (Demand) - Cari Last Down Candle tertambat pada Pivot Low
     for(int i = pi; i <= pi + 5; i++) {
         if(iClose(_Symbol, _Period, i) < iOpen(_Symbol, _Period, i)) { // Bearish candle
-            top = iHigh(_Symbol, _Period, i);
-            btm = iLow(_Symbol, _Period, i);
+            top = iOpen(_Symbol, _Period, i); // Opsi B: Top adalah OPEN dari candle bearish
+            btm = iLow(_Symbol, _Period, i);  // Bottom adalah LOW
             return i;
         }
     }
@@ -813,8 +813,8 @@ int FindSupplyBase(datetime pivot_time, double &top, double &btm) {
     // SMC: Tipe RBD (Supply) - Cari Last Up Candle tertambat pada Pivot High
     for(int i = pi; i <= pi + 5; i++) {
         if(iClose(_Symbol, _Period, i) > iOpen(_Symbol, _Period, i)) { // Bullish candle
-            top = iHigh(_Symbol, _Period, i);
-            btm = iLow(_Symbol, _Period, i);
+            top = iHigh(_Symbol, _Period, i); // Opsi B: Top adalah HIGH
+            btm = iOpen(_Symbol, _Period, i); // Bottom adalah OPEN dari candle bullish
             return i;
         }
     }
@@ -823,13 +823,14 @@ int FindSupplyBase(datetime pivot_time, double &top, double &btm) {
 
 void CheckMitigation(int shift)
   {
-   double c=iClose(_Symbol,_Period,shift);
+   double high=iHigh(_Symbol,_Period,shift);
+   double low=iLow(_Symbol,_Period,shift);
    datetime bt=iTime(_Symbol,_Period,shift);
    for(int i=g_zone_count-1;i>=0;i--)
      {
       if(!g_zones[i].active||bt<=g_zones[i].start_time) continue;
-      // Mitigasi HANYA terjadi (zona batal) jika penutupan lilin (Close) menjebol dinding belakang zona
-      bool mit=g_zones[i].is_demand?(c < g_zones[i].btm):(c > g_zones[i].top);
+      // Mitigasi dengan sentuhan (Wicks) di dinding zona (1-Tap Mitigation)
+      bool mit=g_zones[i].is_demand?(low <= g_zones[i].top):(high >= g_zones[i].btm);
       if(mit) MitigateZone(i,bt);
      }
   }
