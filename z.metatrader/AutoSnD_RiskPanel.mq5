@@ -727,7 +727,7 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
       if(ObjectCreate(0,pinfo,OBJ_TEXT,0,mid_time,center_price)) { 
           ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); 
           ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); 
-          ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,8); 
+          ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,6); // Perkecil ukuran font teks harga
           ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER); // Memaku posisi jangkar teks TEPAT di titik pusatnya
           ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); 
           ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); 
