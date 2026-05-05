@@ -94,20 +94,10 @@ datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
 
 // Ping-Pong State
-double   g_pp_top     = 0;
-double   g_pp_btm     = 0;
-double   g_pp_q75     = 0;
-double   g_pp_q25     = 0;
-double   g_pp_q50     = 0;
-datetime g_pp_start = 0;
-bool     g_pp_active    = false;
-string   g_pp_rect    = "PP_RECT";
-string   g_pp_lbl_top = "PP_LBL_TOP";
-string   g_pp_lbl_btm = "PP_LBL_BTM";
-string   g_pp_lbl_mid = "PP_LBL_MID";
-bool     g_pp_traded_sell = false;
-bool     g_pp_traded_buy  = false;
-
+bool     g_pp_atap_locked = false;
+double   g_pp_atap_price = 0;
+bool     g_pp_lantai_locked = false;
+double   g_pp_lantai_price = 0;
 datetime g_last_processed_bar = 0;
 
 
@@ -946,58 +936,60 @@ void DrawPingPongLine(string name, datetime start_time, double price, color col)
 void PingPongTrader(int shift) {
     if(!InpEnablePingPong) return;
     
-    // Cari ATAP: Cari base Supply (DBD) yang "mengontrol" Pivot High terakhir
-    bool found_atap = false;
-    double atap_top = 0, atap_btm = 0;
-    datetime atap_time = 0;
+    double cls = iClose(_Symbol, _Period, shift);
     
-    if(g_last_ph > 0) {
-       for(int i=g_zone_count-1; i>=0; i--) {
-           // Tidak mensyaratkan g_zones[i].active agar Base termitigasi (Controller) tetap terbaca
-           if(!g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-               double zoneH = g_zones[i].top - g_zones[i].btm;
-               double tol = zoneH * 1.5; // Toleransi kedekatan Ayunan Pivot ke kotak
-               if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
-                   found_atap = true;
-                   atap_top = g_zones[i].top; // Harga Atap Ping-Pong diambil dari area teratas (Top) Original Zone Supply
-                   atap_btm = g_zones[i].btm;
-                   atap_time = g_zones[i].start_time;
-                   break;
+    // --- LOGIKA ATAP (RESISTANCE) ---
+    if(g_pp_atap_locked) {
+        // Cek Breakout Atap (Hanya hancur jika CLOSE menembus batas atas)
+        if(cls > g_pp_atap_price) {
+            g_pp_atap_locked = false;
+            ObjectDelete(0, "PP_ATAP");
+            ObjectDelete(0, "PP_CTRL_ATAP");
+        }
+    } else {
+        // Cari Atap Baru
+        if(g_last_ph > 0) {
+           for(int i=g_zone_count-1; i>=0; i--) {
+               if(!g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+                   double zoneH = g_zones[i].top - g_zones[i].btm;
+                   double tol = zoneH * 1.5;
+                   if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
+                       g_pp_atap_price = g_zones[i].top; 
+                       g_pp_atap_locked = true;
+                       DrawPingPongController("PP_CTRL_ATAP", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrMaroon);
+                       DrawPingPongLine("PP_ATAP", g_zones[i].start_time, g_pp_atap_price, clrRed);
+                       break;
+                   }
                }
            }
-       }
+        }
     }
     
-    // Cari LANTAI: Cari base Demand (RBR) yang "mengontrol" Pivot Low terakhir
-    bool found_lantai = false;
-    double lantai_top = 0, lantai_btm = 0;
-    datetime lantai_time = 0;
-    
-    if(g_last_pl > 0) {
-       for(int i=g_zone_count-1; i>=0; i--) {
-           // Tidak mensyaratkan g_zones[i].active agar Base termitigasi (Controller) tetap terbaca
-           if(g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-               double zoneH = g_zones[i].top - g_zones[i].btm;
-               double tol = zoneH * 1.5; // Toleransi kedekatan Ayunan Pivot ke kotak
-               if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
-                   found_lantai = true;
-                   lantai_top = g_zones[i].top;
-                   lantai_btm = g_zones[i].btm; // Harga Lantai Ping-Pong diambil dari area terbawah (Bottom) Original Zone Demand
-                   lantai_time = g_zones[i].start_time;
-                   break;
+    // --- LOGIKA LANTAI (SUPPORT) ---
+    if(g_pp_lantai_locked) {
+        // Cek Breakout Lantai (Hanya hancur jika CLOSE menembus batas bawah)
+        if(cls < g_pp_lantai_price) {
+            g_pp_lantai_locked = false;
+            ObjectDelete(0, "PP_LANTAI");
+            ObjectDelete(0, "PP_CTRL_LANTAI");
+        }
+    } else {
+        // Cari Lantai Baru
+        if(g_last_pl > 0) {
+           for(int i=g_zone_count-1; i>=0; i--) {
+               if(g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+                   double zoneH = g_zones[i].top - g_zones[i].btm;
+                   double tol = zoneH * 1.5;
+                   if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
+                       g_pp_lantai_price = g_zones[i].btm;
+                       g_pp_lantai_locked = true;
+                       DrawPingPongController("PP_CTRL_LANTAI", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrDarkOliveGreen);
+                       DrawPingPongLine("PP_LANTAI", g_zones[i].start_time, g_pp_lantai_price, clrLimeGreen);
+                       break;
+                   }
                }
            }
-       }
-    }
-    
-    // Jika Atap / Lantai baru divalidasi, gambar Kotak Controller dan tarik garis tipis ke kanan
-    if(found_atap) {
-         DrawPingPongController("PP_CTRL_ATAP", atap_time, atap_top, atap_btm, clrMaroon);
-         DrawPingPongLine("PP_ATAP", atap_time, atap_top, clrRed);
-    }
-    if(found_lantai) {
-         DrawPingPongController("PP_CTRL_LANTAI", lantai_time, lantai_top, lantai_btm, clrDarkOliveGreen);
-         DrawPingPongLine("PP_LANTAI", lantai_time, lantai_btm, clrLimeGreen);
+        }
     }
 }
 
