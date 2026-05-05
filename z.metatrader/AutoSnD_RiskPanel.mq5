@@ -917,144 +917,69 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
      }
   }
 
-void ExecutePingPongTrade(bool isBuy, double entryPrice, double stopLoss, double tpPrice)
-  {
-   if(g_is_scanning_history) return;
-   double riskAmount = ExtPanel.AdjRisk();
-   if(riskAmount <= 0) return;
-   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   stopLoss = isBuy ? stopLoss - InpBufferPoints*pt : stopLoss + InpBufferPoints*pt;
-   entryPrice = NormalizeDouble(entryPrice, digits);
-   stopLoss = NormalizeDouble(stopLoss, digits);
-   tpPrice = NormalizeDouble(tpPrice, digits);
-   double lot = CalcLotSize(riskAmount, entryPrice, stopLoss, _Symbol);
-   if(lot <= 0) return;
-   
-   string comm = "SND_PP";
-   bool result = isBuy
-                 ? ExtTrade.Buy (lot, _Symbol, entryPrice, stopLoss, tpPrice, comm)
-                 : ExtTrade.Sell(lot, _Symbol, entryPrice, stopLoss, tpPrice, comm);
-   if(result)
-     {
-      string dir = isBuy ? "BUY" : "SELL";
-      Print("PingPong Executed: ", dir, " Lot:", lot, " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
-      ExtPanel.SetStatus("PingPong " + dir + " | Lot: " + DoubleToString(lot,2));
-     }
-  }
-
-
-
-// ---- Ping-Pong Logic ----
-void DrawPingPongBox() {
-    if(!InpEnablePingPong) return;
-    ObjectDelete(0, g_pp_rect);
-    if(ObjectCreate(0, g_pp_rect, OBJ_RECTANGLE, 0, g_pp_start, g_pp_top, D'2099.12.31', g_pp_btm)) {
-        ObjectSetInteger(0, g_pp_rect, OBJPROP_COLOR, InpPPBoxColor);
-        ObjectSetInteger(0, g_pp_rect, OBJPROP_FILL, true);
-        ObjectSetInteger(0, g_pp_rect, OBJPROP_BACK, true);
-        ObjectSetInteger(0, g_pp_rect, OBJPROP_SELECTABLE, false);
-        ObjectSetString(0, g_pp_rect, OBJPROP_TOOLTIP, "Ping-Pong Area | 75% Sell | 25% Buy");
-    }
-    ObjectDelete(0, "PP_MID_LINE");
-    if(ObjectCreate(0, "PP_MID_LINE", OBJ_HLINE, 0, 0, g_pp_q50)) {
-        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_COLOR, clrDodgerBlue);
-        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_STYLE, STYLE_DASH);
-        ObjectSetInteger(0, "PP_MID_LINE", OBJPROP_SELECTABLE, false);
+void DrawPingPongLine(string name, datetime start_time, double price, color col) {
+    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
+    if(ObjectCreate(0, name, OBJ_TREND, 0, start_time, price, start_time + PeriodSeconds(_Period)*10, price)) {
+        ObjectSetInteger(0, name, OBJPROP_COLOR, col);
+        ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
+        ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
+        ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, true);
+        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(0, name, OBJPROP_BACK, false);
+        ObjectSetString(0, name, OBJPROP_TOOLTIP, "PingPong Field Boundary");
     }
 }
 
 void PingPongTrader(int shift) {
     if(!InpEnablePingPong) return;
     
-    // Hitung jumlah zona continuation aktif untuk debugging
-    int cont_supply = 0, cont_demand = 0;
-    for(int c=0; c<g_zone_count; c++) {
-       if(g_zones[c].active && g_zones[c].type == ZONE_RBR_DBD) {
-          if(g_zones[c].is_demand) cont_demand++; else cont_supply++;
-       }
-    }
-    
-    // Cari ATAP: zona Supply DBD (Continuation) aktif yang memantulkan Pivot High
+    // Cari ATAP: Cari base Supply (DBD) yang "mengontrol" Pivot High terakhir
     bool found_atap = false;
     double atap_top = 0;
+    datetime atap_time = 0;
+    
     if(g_last_ph > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
-           if(g_zones[i].active && !g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-               // Pivot High menyentuh atau menembus zona Supply (toleransi 1x tinggi zona)
+           // Tidak mensyaratkan g_zones[i].active agar Base termitigasi (Controller) tetap terbaca
+           if(!g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
                double zoneH = g_zones[i].top - g_zones[i].btm;
-               if(g_last_ph >= g_zones[i].btm && g_last_ph <= g_zones[i].top + zoneH) {
+               double tol = zoneH * 1.5; // Toleransi kedekatan Ayunan Pivot ke kotak
+               if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
                    found_atap = true;
-                   atap_top = g_zones[i].top;
+                   atap_top = g_zones[i].top; // Harga Atap Ping-Pong diambil dari area teratas (Top) Original Zone Supply
+                   atap_time = g_zones[i].start_time;
                    break;
                }
            }
        }
     }
     
-    // Cari LANTAI: zona Demand RBR (Continuation) aktif yang memantulkan Pivot Low
+    // Cari LANTAI: Cari base Demand (RBR) yang "mengontrol" Pivot Low terakhir
     bool found_lantai = false;
     double lantai_btm = 0;
+    datetime lantai_time = 0;
+    
     if(g_last_pl > 0) {
        for(int i=g_zone_count-1; i>=0; i--) {
-           if(g_zones[i].active && g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-              double zoneH = g_zones[i].top - g_zones[i].btm;
-              if(g_last_pl <= g_zones[i].top && g_last_pl >= g_zones[i].btm - zoneH) {
-                  found_lantai = true;
-                  lantai_btm = g_zones[i].btm;
-                  break;
-              }
+           // Tidak mensyaratkan g_zones[i].active agar Base termitigasi (Controller) tetap terbaca
+           if(g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
+               double zoneH = g_zones[i].top - g_zones[i].btm;
+               double tol = zoneH * 1.5; // Toleransi kedekatan Ayunan Pivot ke kotak
+               if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
+                   found_lantai = true;
+                   lantai_btm = g_zones[i].btm; // Harga Lantai Ping-Pong diambil dari area terbawah (Bottom) Original Zone Demand
+                   lantai_time = g_zones[i].start_time;
+                   break;
+               }
            }
        }
     }
     
-    // Debug: cetak status di tab Experts agar mudah dipantau
-    if(!g_is_scanning_history && shift <= 1) {
-       Print("[PP] ContZones: Supply=", cont_supply, " Demand=", cont_demand,
-             " | PH=", g_last_ph, " PL=", g_last_pl,
-             " | Atap=", found_atap, "(", atap_top, ")",
-             " Lantai=", found_lantai, "(", lantai_btm, ")");
-    }
-    
-    if(found_atap && found_lantai) {
-        if(!g_pp_active || g_pp_top != atap_top || g_pp_btm != lantai_btm) {
-            g_pp_active = true;
-            g_pp_top = atap_top;
-            g_pp_btm = lantai_btm;
-            g_pp_start = iTime(_Symbol, _Period, shift);
-            double range = g_pp_top - g_pp_btm;
-            g_pp_q75 = g_pp_btm + range * 0.75;
-            g_pp_q25 = g_pp_btm + range * 0.25;
-            g_pp_q50 = g_pp_btm + range * 0.50;
-            g_pp_traded_sell = false;
-            g_pp_traded_buy  = false;
-            DrawPingPongBox();
-        }
-    }
-    
-    if(!g_pp_active) return;
-    
-    double cls = iClose(_Symbol, _Period, shift);
-    if(cls > g_pp_top || cls < g_pp_btm) {
-        g_pp_active = false;
-        ObjectDelete(0, g_pp_rect);
-        ObjectDelete(0, "PP_MID_LINE");
-        return;
-    }
-    
-    if(g_is_scanning_history) return;
-    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    
-    if(bid >= g_pp_q75 && bid <= g_pp_top && !g_pp_traded_sell) {
-        g_pp_traded_sell = true;
-        ExecutePingPongTrade(false, bid, g_pp_top, g_pp_q50);
-    }
-    if(ask <= g_pp_q25 && ask >= g_pp_btm && !g_pp_traded_buy) {
-        g_pp_traded_buy = true;
-        ExecutePingPongTrade(true, ask, g_pp_btm, g_pp_q50);
-    }
+    // Jika Atap / Lantai baru divalidasi, tarik garis lurus dari sejarah waktu Base tersebut ke arah kanan
+    if(found_atap)   DrawPingPongLine("PP_ATAP", atap_time, atap_top, clrRed);
+    if(found_lantai) DrawPingPongLine("PP_LANTAI", lantai_time, lantai_btm, clrLimeGreen);
 }
+
 
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
 void ProcessBar(int shift)
