@@ -58,6 +58,7 @@ input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 
 input group "=== Ping-Pong Strategy ==="
 input bool   InpEnablePingPong    = false;   // Enable Ping-Pong (Sideways) Scalping [DITUNDA]
+input bool   InpShowPPController  = true;    // Tampilkan Kotak Controller Original Base PingPong
 input color  InpPPBoxColor        = C'30,30,30'; // Warna background area Ping-Pong
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
@@ -96,8 +97,11 @@ datetime g_marked_pl_time = 0;
 // Ping-Pong State
 bool     g_pp_atap_locked = false;
 double   g_pp_atap_price = 0;
+datetime g_pp_atap_broken_time = 0;
+
 bool     g_pp_lantai_locked = false;
 double   g_pp_lantai_price = 0;
+datetime g_pp_lantai_broken_time = 0;
 datetime g_last_processed_bar = 0;
 
 
@@ -943,21 +947,22 @@ void PingPongTrader(int shift) {
         // Cek Breakout Atap (Hanya hancur jika CLOSE menembus batas atas)
         if(cls > g_pp_atap_price) {
             g_pp_atap_locked = false;
+            g_pp_atap_broken_time = iTime(_Symbol, _Period, shift); // Catat waktu hancurnya Atap
             ObjectDelete(0, "PP_ATAP");
             ObjectDelete(0, "PP_CTRL_ATAP");
         }
     } else {
-        // Cari Atap Baru
-        if(g_last_ph > 0) {
+        // Cari Atap Baru (Hanya proses pivot yang umurnya pasca-Breakout)
+        if(g_last_ph > 0 && g_last_ph_time > g_pp_atap_broken_time) {
            for(int i=g_zone_count-1; i>=0; i--) {
                if(!g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
                    double zoneH = g_zones[i].top - g_zones[i].btm;
                    double tol = zoneH * 1.5;
                    if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
-                       g_pp_atap_price = g_zones[i].top; 
+                       g_pp_atap_price = g_last_ph; // DIKUNCI KE TINGGI PIVOT (Swing), bukan Base
                        g_pp_atap_locked = true;
-                       DrawPingPongController("PP_CTRL_ATAP", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrMaroon);
-                       DrawPingPongLine("PP_ATAP", g_zones[i].start_time, g_pp_atap_price, clrRed);
+                       if(InpShowPPController) DrawPingPongController("PP_CTRL_ATAP", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrMaroon);
+                       DrawPingPongLine("PP_ATAP", g_last_ph_time, g_pp_atap_price, clrRed); // Tarik murni dari ekor Pucuk
                        break;
                    }
                }
@@ -970,21 +975,22 @@ void PingPongTrader(int shift) {
         // Cek Breakout Lantai (Hanya hancur jika CLOSE menembus batas bawah)
         if(cls < g_pp_lantai_price) {
             g_pp_lantai_locked = false;
+            g_pp_lantai_broken_time = iTime(_Symbol, _Period, shift); // Catat waktu hancurnya Lantai
             ObjectDelete(0, "PP_LANTAI");
             ObjectDelete(0, "PP_CTRL_LANTAI");
         }
     } else {
-        // Cari Lantai Baru
-        if(g_last_pl > 0) {
+        // Cari Lantai Baru (Hanya proses pivot yang umurnya pasca-Breakout)
+        if(g_last_pl > 0 && g_last_pl_time > g_pp_lantai_broken_time) {
            for(int i=g_zone_count-1; i>=0; i--) {
                if(g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
                    double zoneH = g_zones[i].top - g_zones[i].btm;
                    double tol = zoneH * 1.5;
                    if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
-                       g_pp_lantai_price = g_zones[i].btm;
+                       g_pp_lantai_price = g_last_pl; // DIKUNCI KE BAWAH PIVOT (Swing), bukan Base
                        g_pp_lantai_locked = true;
-                       DrawPingPongController("PP_CTRL_LANTAI", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrDarkOliveGreen);
-                       DrawPingPongLine("PP_LANTAI", g_zones[i].start_time, g_pp_lantai_price, clrLimeGreen);
+                       if(InpShowPPController) DrawPingPongController("PP_CTRL_LANTAI", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrDarkOliveGreen);
+                       DrawPingPongLine("PP_LANTAI", g_last_pl_time, g_pp_lantai_price, clrLimeGreen); // Tarik murni dari ekor Pucuk
                        break;
                    }
                }
@@ -1228,8 +1234,8 @@ int OnInit()
    g_last_pl = 0; g_last_pl_time = 0;
    g_old_last_ph = 0; g_old_last_pl = 0;
    g_marked_ph_time = 0; g_marked_pl_time = 0;
-   g_pp_atap_locked = false; g_pp_atap_price = 0;
-   g_pp_lantai_locked = false; g_pp_lantai_price = 0;
+   g_pp_atap_locked = false; g_pp_atap_price = 0; g_pp_atap_broken_time = 0;
+   g_pp_lantai_locked = false; g_pp_lantai_price = 0; g_pp_lantai_broken_time = 0;
    g_resync_done = false;
    
    ScanHistory(); // Scan full history using SnD_Zone logic
