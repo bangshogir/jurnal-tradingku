@@ -1228,8 +1228,8 @@ int OnInit()
    g_last_pl = 0; g_last_pl_time = 0;
    g_old_last_ph = 0; g_old_last_pl = 0;
    g_marked_ph_time = 0; g_marked_pl_time = 0;
-   g_pp_active = false; g_pp_top = 0; g_pp_btm = 0;
-   g_pp_traded_sell = false; g_pp_traded_buy = false;
+   g_pp_atap_locked = false; g_pp_atap_price = 0;
+   g_pp_lantai_locked = false; g_pp_lantai_price = 0;
    g_resync_done = false;
    
    ScanHistory(); // Scan full history using SnD_Zone logic
