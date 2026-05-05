@@ -56,10 +56,7 @@ input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 
-input group "=== Ping-Pong Strategy ==="
-input bool   InpEnablePingPong    = false;   // Enable Ping-Pong (Sideways) Scalping [DITUNDA]
-input bool   InpShowPPController  = true;    // Tampilkan Kotak Controller Original Base PingPong
-input color  InpPPBoxColor        = C'30,30,30'; // Warna background area Ping-Pong
+
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
 //=====================================================================
@@ -94,14 +91,7 @@ double   g_old_last_pl  = 0;
 datetime g_marked_ph_time = 0;
 datetime g_marked_pl_time = 0;
 
-// Ping-Pong State
-bool     g_pp_atap_locked = false;
-double   g_pp_atap_price = 0;
-datetime g_pp_atap_broken_time = 0;
 
-bool     g_pp_lantai_locked = false;
-double   g_pp_lantai_price = 0;
-datetime g_pp_lantai_broken_time = 0;
 datetime g_last_processed_bar = 0;
 
 
@@ -911,93 +901,6 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
      }
   }
 
-void DrawPingPongController(string name, datetime start_time, double top, double btm, color col) {
-    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
-    // Draw short box (12 candles wide for visibility)
-    datetime end_time = start_time + PeriodSeconds(_Period) * 12;
-    if(ObjectCreate(0, name, OBJ_RECTANGLE, 0, start_time, top, end_time, btm)) {
-        ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-        ObjectSetInteger(0, name, OBJPROP_FILL, true);
-        ObjectSetInteger(0, name, OBJPROP_BACK, true);
-        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-        ObjectSetString(0, name, OBJPROP_TOOLTIP, "Controller Area Ping-Pong");
-    }
-}
-
-void DrawPingPongLine(string name, datetime start_time, double price, color col) {
-    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
-    if(ObjectCreate(0, name, OBJ_TREND, 0, start_time, price, start_time + PeriodSeconds(_Period)*10, price)) {
-        ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-        ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
-        ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
-        ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, true);
-        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-        ObjectSetInteger(0, name, OBJPROP_BACK, false);
-        ObjectSetString(0, name, OBJPROP_TOOLTIP, "PingPong Field Boundary");
-    }
-}
-
-void PingPongTrader(int shift) {
-    if(!InpEnablePingPong) return;
-    
-    double cls = iClose(_Symbol, _Period, shift);
-    
-    // --- LOGIKA ATAP (RESISTANCE) ---
-    if(g_pp_atap_locked) {
-        // Cek Breakout Atap (Hanya hancur jika CLOSE menembus batas atas)
-        if(cls > g_pp_atap_price) {
-            g_pp_atap_locked = false;
-            g_pp_atap_broken_time = iTime(_Symbol, _Period, shift); // Catat waktu hancurnya Atap
-            ObjectDelete(0, "PP_ATAP");
-            ObjectDelete(0, "PP_CTRL_ATAP");
-        }
-    } else {
-        // Cari Atap Baru (Hanya proses pivot yang umurnya pasca-Breakout)
-        if(g_last_ph > 0 && g_last_ph_time > g_pp_atap_broken_time) {
-           for(int i=g_zone_count-1; i>=0; i--) {
-               if(!g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-                   double zoneH = g_zones[i].top - g_zones[i].btm;
-                   double tol = zoneH * 1.5;
-                   if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
-                       g_pp_atap_price = g_last_ph; // DIKUNCI KE TINGGI PIVOT (Swing), bukan Base
-                       g_pp_atap_locked = true;
-                       if(InpShowPPController) DrawPingPongController("PP_CTRL_ATAP", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrMaroon);
-                       DrawPingPongLine("PP_ATAP", g_last_ph_time, g_pp_atap_price, clrRed); // Tarik murni dari ekor Pucuk
-                       break;
-                   }
-               }
-           }
-        }
-    }
-    
-    // --- LOGIKA LANTAI (SUPPORT) ---
-    if(g_pp_lantai_locked) {
-        // Cek Breakout Lantai (Hanya hancur jika CLOSE menembus batas bawah)
-        if(cls < g_pp_lantai_price) {
-            g_pp_lantai_locked = false;
-            g_pp_lantai_broken_time = iTime(_Symbol, _Period, shift); // Catat waktu hancurnya Lantai
-            ObjectDelete(0, "PP_LANTAI");
-            ObjectDelete(0, "PP_CTRL_LANTAI");
-        }
-    } else {
-        // Cari Lantai Baru (Hanya proses pivot yang umurnya pasca-Breakout)
-        if(g_last_pl > 0 && g_last_pl_time > g_pp_lantai_broken_time) {
-           for(int i=g_zone_count-1; i>=0; i--) {
-               if(g_zones[i].is_demand && g_zones[i].type == ZONE_RBR_DBD) {
-                   double zoneH = g_zones[i].top - g_zones[i].btm;
-                   double tol = zoneH * 1.5;
-                   if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
-                       g_pp_lantai_price = g_last_pl; // DIKUNCI KE BAWAH PIVOT (Swing), bukan Base
-                       g_pp_lantai_locked = true;
-                       if(InpShowPPController) DrawPingPongController("PP_CTRL_LANTAI", g_zones[i].start_time, g_zones[i].top, g_zones[i].btm, clrDarkOliveGreen);
-                       DrawPingPongLine("PP_LANTAI", g_last_pl_time, g_pp_lantai_price, clrLimeGreen); // Tarik murni dari ekor Pucuk
-                       break;
-                   }
-               }
-           }
-        }
-    }
-}
 
 
 // ---- Main ProcessBar (identical to SnD_Zone + Fibo trigger) ----
@@ -1050,7 +953,7 @@ void ProcessBar(int shift)
 
    CheckMitigation(shift);
    CheckContinuationZone(shift);
-   PingPongTrader(shift);
+
   }
 
 void ScanHistory()
@@ -1234,8 +1137,6 @@ int OnInit()
    g_last_pl = 0; g_last_pl_time = 0;
    g_old_last_ph = 0; g_old_last_pl = 0;
    g_marked_ph_time = 0; g_marked_pl_time = 0;
-   g_pp_atap_locked = false; g_pp_atap_price = 0; g_pp_atap_broken_time = 0;
-   g_pp_lantai_locked = false; g_pp_lantai_price = 0; g_pp_lantai_broken_time = 0;
    g_resync_done = false;
    
    ScanHistory(); // Scan full history using SnD_Zone logic
