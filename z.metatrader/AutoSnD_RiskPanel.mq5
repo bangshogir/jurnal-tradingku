@@ -30,7 +30,6 @@ input bool    InpEnableAutoCloseFriday = false; // Enable Auto Close Friday
 input int     InpAutoCloseMinutesBefore = 15;   // Minutes before market close
 
 input group "=== Auto SnD Trading Logic ==="
-input bool    InpEnableAutoSnD  = false; // Enable FULL AUTO TRADING
 input int     InpPivotLB        = 5;     // Pivot Lookback (bars)
 input int     InpOriginLookback = 50;    // Traceback max candle base
 input double  InpBufferPoints   = 20.0;    // Jarak Buffer SL (Points)
@@ -41,18 +40,12 @@ input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
 input bool   InpShowMitigated  = true;          // Tampilkan Zona Termitigasi
 input color  InpMitColor       = clrGray;       // Warna Border Zona Termitigasi
 input bool   InpShowRbdDbr     = true;          // Tampilkan Zona Reversal (RBD/DBR)
-input bool   InpAutoTradeRbdDbr= true;          // Auto-Trade Zona Reversal
 input bool   InpShowRbrDbd     = true;          // Tampilkan Zona Continuation (RBR/DBD)
 input bool   InpAutoTradeRbrDbd= false;         // Auto-Trade Zona Continuation
 input color  InpContColor      = clrLightBlue;  // Warna Border Zona Continuation
 input int    InpBaseMaxCandles = 3;             // Max Base Candles utk Continuation
 input color  InpBOSBull        = clrDodgerBlue; // Warna Bullish BOS
 input color  InpBOSBear        = clrOrangeRed;  // Warna Bearish BOS
-input color  InpGoldenZoneColor= clrGold;       // Warna Zona SnD di area Golden Fibo
-
-input group "=== Imbalance & FVG Filter ==="
-input bool   InpFilterFVG       = true;          // Sorot Zona Imbalance (FVG)
-input color  InpFVGColor        = C'180,0,180';  // Warna zona Imbalance / FVG (Magenta)
 
 input group "=== Momentum Indicator ==="
 input int    InpEarlySignalSeconds  = 10;    // Detik Early Signal Momentum (0=Off)
@@ -117,15 +110,7 @@ bool     g_pp_traded_buy  = false;
 
 datetime g_last_processed_bar = 0;
 
-// Tracks BOS origin level for Fibo drawing (set when BOS fires)
-double   g_fibo_origin_bullish = 0; // Swing Low origin of Bullish BOS move
-double   g_fibo_origin_bearish = 0; // Swing High origin of Bearish BOS move
-datetime g_fibo_origin_bull_time = 0;
-datetime g_fibo_origin_bear_time = 0;
-bool     g_fibo_bull_pending = false; // Waiting for pivot confirmation after Bull BOS
-bool     g_fibo_bear_pending = false; // Waiting for pivot confirmation after Bear BOS
-int      g_pending_bull_zone_idx = -1; // Exact zone index created by latest Bull BOS
-int      g_pending_bear_zone_idx = -1; // Exact zone index created by latest Bear BOS
+
 bool     g_is_scanning_history = false; // Prevents auto trades from firing during history scan
 
 int      g_atr_handle = INVALID_HANDLE; // Handle untuk indikator ATR
@@ -399,7 +384,7 @@ public:
 
       // Row 1: Symbol & Status
       if(!MkLabel(m_lbl_pair,   "LPair",   _Symbol,                         lx, y, lx+80, y+ch, 8)) return false;
-      if(!MkLabel(m_lbl_spread, "LSpread", InpEnableAutoSnD ? "AUTO:ON" : "AUTO:OFF", lx+85, y, rx, y+ch, 8)) return false;
+      if(!MkLabel(m_lbl_spread, "LSpread", "Spread: 0", lx+85, y, rx, y+ch, 8)) return false;
       y += ch + 5;
 
       // Row 2: Balance
@@ -922,112 +907,7 @@ void ExecutePingPongTrade(bool isBuy, double entryPrice, double stopLoss, double
      }
   }
 
-// ---- Execution ----
-void ExecuteAutoTrade(bool isDemand, double zoneTop, double zoneBtm, datetime zoneTime)
-  {
-   if(g_is_scanning_history) return;
-   if(!InpEnableAutoSnD) return;
-   if(IsZoneTraded(zoneTime)) return;
-   double risk = StringToDouble(ExtPanel.m_edt_risk.Text());
-   if(risk <= 0) return;
-   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   double entryPrice = isDemand ? zoneTop : zoneBtm;
-   double stopLoss = isDemand ? (zoneBtm - InpBufferPoints*pt) : (zoneTop + InpBufferPoints*pt);
-   entryPrice = NormalizeDouble(entryPrice, digits);
-   stopLoss = NormalizeDouble(stopLoss, digits);
-   double riskAmount = ExtPanel.AdjRisk();
-   double lot = CalcLotSize(riskAmount, entryPrice, stopLoss, _Symbol);
-   if(lot <= 0) {
-      string msg = "Gagal Open Posisi (AutoSnD): Lot tidak mencukupi standar broker. (Kalkulasi Lot: " + DoubleToString(lot,2) + ")";
-      Print(msg);
-      if(lot == -2) msg += " | Risk (" + DoubleToString(riskAmount,2) + ") tidak cukup besar untuk membuka Lot minimum broker pada jarak SL!";
-      Print(msg); SendAlertToWebhook(msg);
-      return;
-   }
-   double mult = StringToDouble(ExtPanel.m_edt_ratio.Text());
-   if(mult <= 0) mult = 2.0;
-   double diff = MathAbs(entryPrice - stopLoss);
-   double tpPrice = isDemand ? (entryPrice + diff*mult) : (entryPrice - diff*mult);
-   tpPrice = NormalizeDouble(tpPrice, digits);
-   string comm = "SND_AUTO";
-   double backupSL = stopLoss; // By default, Hard SL is the calculated Stop Loss
-   
-   if(ExtPanel.m_cl_active)
-     {
-      comm = "SND_CL_" + DoubleToString(stopLoss, digits);
-      // Soft CL is active. Set Hard SL further away (2x distance) as a safety net.
-      backupSL = isDemand ? NormalizeDouble(entryPrice - diff * 2.0, digits) : NormalizeDouble(entryPrice + diff * 2.0, digits);
-     }
-     
-   bool result = isDemand ? ExtTrade.BuyLimit(lot, entryPrice, _Symbol, backupSL, tpPrice, ORDER_TIME_GTC, 0, comm)
-                          : ExtTrade.SellLimit(lot, entryPrice, _Symbol, backupSL, tpPrice, ORDER_TIME_GTC, 0, comm);
-   if(result)
-     {
-      MarkZoneTraded(zoneTime);
-      Print("AutoSnD Executed: ", (isDemand?"BuyLimit":"SellLimit"), " Entry:", entryPrice, " SL:", stopLoss, " TP:", tpPrice);
-     } else {
-      string errStr = "Failed AutoSnD " + (string)(isDemand?"BuyLimit":"SellLimit") + ". Error " + IntegerToString(GetLastError());
-      Print(errStr); SendAlertToWebhook(errStr);
-     }
-  }
 
-// ---- Fibo Filter: Check a specific zone vs Fibo Golden Zone ----
-bool CheckFiboAndTrade(double fibo_low, double fibo_high, datetime from_time, int zone_idx)
-  {
-   if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
-   if(!g_zones[zone_idx].active) return false;
-   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
-
-   // Golden Zone boundaries
-   double dist    = fibo_high - fibo_low;
-   double f_upper = fibo_high - dist * 0.382; // 38.2 level
-   double f_lower = fibo_high - dist * 0.618; // 61.8 level
-
-   // Check if the base overlaps the Golden Zone
-   bool overlaps = (g_zones[zone_idx].top >= f_lower) && (g_zones[zone_idx].btm <= f_upper);
-   if(!overlaps) return false;
-
-   // Zone IS in the Golden Zone — change zone color and execute
-   ObjectSetInteger(0, g_zones[zone_idx].rect_name, OBJPROP_COLOR, InpGoldenZoneColor);
-   ObjectSetInteger(0, g_zones[zone_idx].lbl_name, OBJPROP_COLOR, InpGoldenZoneColor);
-   ObjectSetInteger(0, g_zones[zone_idx].lbl_top, OBJPROP_COLOR, InpGoldenZoneColor);
-   ObjectSetInteger(0, g_zones[zone_idx].lbl_btm, OBJPROP_COLOR, InpGoldenZoneColor);
-   ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
-   return true;
-  }
-
-// ---- FVG Filter: Check FVG at breakout candle ----
-bool CheckFVGAndTrade(int shift, int zone_idx)
-  {
-   if(!InpFilterFVG) return false;
-   if(zone_idx < 0 || zone_idx >= g_zone_count) return false;
-   if(!g_zones[zone_idx].active) return false;
-   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
-
-   bool isDemand = g_zones[zone_idx].is_demand;
-   bool hasFVG = false;
-   
-   if(isDemand) {
-      double fvg_top = iLow(_Symbol, _Period, shift);
-      double fvg_btm = iHigh(_Symbol, _Period, shift+2);
-      if(fvg_top > fvg_btm) hasFVG = true;
-   } else {
-      double fvg_top = iLow(_Symbol, _Period, shift+2);
-      double fvg_btm = iHigh(_Symbol, _Period, shift);
-      if(fvg_top > fvg_btm) hasFVG = true;
-   }
-
-   if(hasFVG) {
-      ObjectSetInteger(0, g_zones[zone_idx].rect_name, OBJPROP_COLOR, InpFVGColor);
-      ObjectSetInteger(0, g_zones[zone_idx].lbl_name, OBJPROP_COLOR, InpFVGColor);
-      ObjectSetInteger(0, g_zones[zone_idx].lbl_top, OBJPROP_COLOR, InpFVGColor);
-      ObjectSetInteger(0, g_zones[zone_idx].lbl_btm, OBJPROP_COLOR, InpFVGColor);
-      ExecuteAutoTrade(g_zones[zone_idx].is_demand, g_zones[zone_idx].top, g_zones[zone_idx].btm, g_zones[zone_idx].start_time);
-      return true;
-   }
-   return false;
-  }
 
 // ---- Ping-Pong Logic ----
 void DrawPingPongBox() {
@@ -1159,36 +1039,19 @@ void ProcessBar(int shift)
       g_last_pl=pl; g_last_pl_time=t;
      }
 
-   bool bull_fvg=iLow(_Symbol,_Period,shift)>iHigh(_Symbol,_Period,shift+2);
-   bool bear_fvg=iHigh(_Symbol,_Period,shift)<iLow(_Symbol,_Period,shift+2);
    double cls=iClose(_Symbol,_Period,shift);
 
-   bool bull_bos=bull_fvg&&g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
-   bool bear_bos=bear_fvg&&g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
+   bool bull_bos=g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
+   bool bear_bos=g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
 
    if(bull_bos)
      {
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(_Symbol,_Period,shift));
       
-      // Force reset pending state for this new BOS cycle
-      g_fibo_bull_pending = false;
-      g_pending_bull_zone_idx = -1;
-      
       int base=FindDemandBase(shift);
       if(base!=-1)
-        {
          DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
-         g_pending_bull_zone_idx = g_zone_count - 1; // Track exact zone index
-         
-         // Trigger FVG check immediately
-         CheckFVGAndTrade(shift, g_pending_bull_zone_idx);
-         
-         // Record fibo origin: Swing Low before BOS → will wait for new Pivot High
-         g_fibo_origin_bullish  = g_last_pl;
-         g_fibo_origin_bull_time = g_last_pl_time;
-         g_fibo_bull_pending = true;
-        }
      }
 
    if(bear_bos)
@@ -1196,48 +1059,9 @@ void ProcessBar(int shift)
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(_Symbol,_Period,shift));
       
-      // Force reset pending state for this new BOS cycle
-      g_fibo_bear_pending = false;
-      g_pending_bear_zone_idx = -1;
-      
       int base=FindSupplyBase(shift);
       if(base!=-1)
-        {
          DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
-         g_pending_bear_zone_idx = g_zone_count - 1; // Track exact zone index
-         
-         // Trigger FVG check immediately
-         CheckFVGAndTrade(shift, g_pending_bear_zone_idx);
-         
-         // Record fibo origin: Swing High before BOS → will wait for new Pivot Low
-         g_fibo_origin_bearish  = g_last_ph;
-         g_fibo_origin_bear_time = g_last_ph_time;
-         g_fibo_bear_pending = true;
-        }
-     }
-
-   // --- Fibo: Wait for Pivot confirmed by InpPivotLB bars ---
-   // We DO NOT set pending = false here. If a minor pivot doesn't overlap the zone,
-   // it will just ignore it and evaluate the next confirmed pivot later, until a trade hits.
-   
-   if(g_fibo_bull_pending && ph > 0 && g_last_ph_time > g_fibo_origin_bull_time)
-     {
-      // GetPivotHigh ensures InpPivotLB (5) bars have closed lower, naturally confirming the pivot.
-      if(CheckFiboAndTrade(g_fibo_origin_bullish, g_last_ph, g_fibo_origin_bull_time, g_pending_bull_zone_idx))
-        {
-         g_fibo_bull_pending = false;
-         g_pending_bull_zone_idx = -1;
-        }
-     }
-
-   if(g_fibo_bear_pending && pl > 0 && g_last_pl_time > g_fibo_origin_bear_time)
-     {
-      // GetPivotLow ensures InpPivotLB (5) bars have closed higher, naturally confirming the pivot.
-      if(CheckFiboAndTrade(g_last_pl, g_fibo_origin_bearish, g_fibo_origin_bear_time, g_pending_bear_zone_idx))
-        {
-         g_fibo_bear_pending = false;
-         g_pending_bear_zone_idx = -1;
-        }
      }
 
    CheckMitigation(shift);
@@ -1402,10 +1226,6 @@ void CheckContinuationZone(int shift) {
       }
       
       DrawZone(is_bull_rally, top, btm, st, ZONE_RBR_DBD);
-      
-      if(!g_is_scanning_history && InpAutoTradeRbrDbd) {
-         ExecuteAutoTrade(is_bull_rally, top, btm, st);
-      }
    }
 }
 
@@ -1432,8 +1252,6 @@ int OnInit()
    g_marked_ph_time = 0; g_marked_pl_time = 0;
    g_pp_active = false; g_pp_top = 0; g_pp_btm = 0;
    g_pp_traded_sell = false; g_pp_traded_buy = false;
-   g_fibo_bull_pending = false; g_fibo_bear_pending = false;
-   g_pending_bull_zone_idx = -1; g_pending_bear_zone_idx = -1;
    g_resync_done = false;
    
    ScanHistory(); // Scan full history using SnD_Zone logic
@@ -1441,7 +1259,7 @@ int OnInit()
    
    g_last_processed_bar = iTime(_Symbol, _Period, 0);
    
-   Print("AutoSnD EA v3.00 Ready. Trading: ", (InpEnableAutoSnD?"ON":"OFF"));
+   Print("AutoSnD EA v3.00 Ready.");
    return INIT_SUCCEEDED;
   }
 
