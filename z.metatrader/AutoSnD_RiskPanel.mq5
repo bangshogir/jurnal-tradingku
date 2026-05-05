@@ -917,6 +917,19 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
      }
   }
 
+void DrawPingPongController(string name, datetime start_time, double top, double btm, color col) {
+    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
+    // Draw short box (12 candles wide for visibility)
+    datetime end_time = start_time + PeriodSeconds(_Period) * 12;
+    if(ObjectCreate(0, name, OBJ_RECTANGLE, 0, start_time, top, end_time, btm)) {
+        ObjectSetInteger(0, name, OBJPROP_COLOR, col);
+        ObjectSetInteger(0, name, OBJPROP_FILL, true);
+        ObjectSetInteger(0, name, OBJPROP_BACK, true);
+        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+        ObjectSetString(0, name, OBJPROP_TOOLTIP, "Controller Area Ping-Pong");
+    }
+}
+
 void DrawPingPongLine(string name, datetime start_time, double price, color col) {
     if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
     if(ObjectCreate(0, name, OBJ_TREND, 0, start_time, price, start_time + PeriodSeconds(_Period)*10, price)) {
@@ -935,7 +948,7 @@ void PingPongTrader(int shift) {
     
     // Cari ATAP: Cari base Supply (DBD) yang "mengontrol" Pivot High terakhir
     bool found_atap = false;
-    double atap_top = 0;
+    double atap_top = 0, atap_btm = 0;
     datetime atap_time = 0;
     
     if(g_last_ph > 0) {
@@ -947,6 +960,7 @@ void PingPongTrader(int shift) {
                if(g_last_ph >= g_zones[i].btm - tol && g_last_ph <= g_zones[i].top + tol) {
                    found_atap = true;
                    atap_top = g_zones[i].top; // Harga Atap Ping-Pong diambil dari area teratas (Top) Original Zone Supply
+                   atap_btm = g_zones[i].btm;
                    atap_time = g_zones[i].start_time;
                    break;
                }
@@ -956,7 +970,7 @@ void PingPongTrader(int shift) {
     
     // Cari LANTAI: Cari base Demand (RBR) yang "mengontrol" Pivot Low terakhir
     bool found_lantai = false;
-    double lantai_btm = 0;
+    double lantai_top = 0, lantai_btm = 0;
     datetime lantai_time = 0;
     
     if(g_last_pl > 0) {
@@ -967,6 +981,7 @@ void PingPongTrader(int shift) {
                double tol = zoneH * 1.5; // Toleransi kedekatan Ayunan Pivot ke kotak
                if(g_last_pl <= g_zones[i].top + tol && g_last_pl >= g_zones[i].btm - tol) {
                    found_lantai = true;
+                   lantai_top = g_zones[i].top;
                    lantai_btm = g_zones[i].btm; // Harga Lantai Ping-Pong diambil dari area terbawah (Bottom) Original Zone Demand
                    lantai_time = g_zones[i].start_time;
                    break;
@@ -975,9 +990,15 @@ void PingPongTrader(int shift) {
        }
     }
     
-    // Jika Atap / Lantai baru divalidasi, tarik garis lurus dari sejarah waktu Base tersebut ke arah kanan
-    if(found_atap)   DrawPingPongLine("PP_ATAP", atap_time, atap_top, clrRed);
-    if(found_lantai) DrawPingPongLine("PP_LANTAI", lantai_time, lantai_btm, clrLimeGreen);
+    // Jika Atap / Lantai baru divalidasi, gambar Kotak Controller dan tarik garis tipis ke kanan
+    if(found_atap) {
+         DrawPingPongController("PP_CTRL_ATAP", atap_time, atap_top, atap_btm, clrMaroon);
+         DrawPingPongLine("PP_ATAP", atap_time, atap_top, clrRed);
+    }
+    if(found_lantai) {
+         DrawPingPongController("PP_CTRL_LANTAI", lantai_time, lantai_top, lantai_btm, clrDarkOliveGreen);
+         DrawPingPongLine("PP_LANTAI", lantai_time, lantai_btm, clrLimeGreen);
+    }
 }
 
 
