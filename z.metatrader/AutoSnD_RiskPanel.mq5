@@ -793,8 +793,33 @@ double GetPivotLow(int lb, int shift)
    return c;
   }
 
-int FindDemandBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)<iOpen(_Symbol,_Period,i)) return i; return -1; }
-int FindSupplyBase(int shift) { for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(_Symbol,_Period,i)>iOpen(_Symbol,_Period,i)) return i; return -1; }
+int FindDemandBase(datetime pivot_time, double &top, double &btm) {
+    int pi = iBarShift(_Symbol, _Period, pivot_time);
+    if(pi < 0) return -1;
+    // SMC: Tipe DBR (Demand) - Cari Last Down Candle tertambat pada Pivot Low
+    for(int i = pi; i <= pi + 5; i++) {
+        if(iClose(_Symbol, _Period, i) < iOpen(_Symbol, _Period, i)) { // Bearish candle
+            top = iHigh(_Symbol, _Period, i);
+            btm = iLow(_Symbol, _Period, i);
+            return i;
+        }
+    }
+    return -1;
+}
+
+int FindSupplyBase(datetime pivot_time, double &top, double &btm) {
+    int pi = iBarShift(_Symbol, _Period, pivot_time);
+    if(pi < 0) return -1;
+    // SMC: Tipe RBD (Supply) - Cari Last Up Candle tertambat pada Pivot High
+    for(int i = pi; i <= pi + 5; i++) {
+        if(iClose(_Symbol, _Period, i) > iOpen(_Symbol, _Period, i)) { // Bullish candle
+            top = iHigh(_Symbol, _Period, i);
+            btm = iLow(_Symbol, _Period, i);
+            return i;
+        }
+    }
+    return -1;
+}
 
 void CheckMitigation(int shift)
   {
@@ -1049,9 +1074,11 @@ void ProcessBar(int shift)
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(_Symbol,_Period,shift));
       
-      int base=FindDemandBase(shift);
-      if(base!=-1)
-         DrawZone(true,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+      if(InpShowRbdDbr) {
+         double top = -1, btm = -1;
+         int base = FindDemandBase(g_last_pl_time, top, btm);
+         if(base != -1) DrawZone(true, top, btm, iTime(_Symbol, _Period, base));
+      }
      }
 
    if(bear_bos)
@@ -1059,9 +1086,11 @@ void ProcessBar(int shift)
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(_Symbol,_Period,shift));
       
-      int base=FindSupplyBase(shift);
-      if(base!=-1)
-         DrawZone(false,iHigh(_Symbol,_Period,base),iLow(_Symbol,_Period,base),iTime(_Symbol,_Period,base));
+      if(InpShowRbdDbr) {
+         double top = -1, btm = -1;
+         int base = FindSupplyBase(g_last_ph_time, top, btm);
+         if(base != -1) DrawZone(false, top, btm, iTime(_Symbol, _Period, base));
+      }
      }
 
    CheckMitigation(shift);
