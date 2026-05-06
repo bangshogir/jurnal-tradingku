@@ -306,7 +306,57 @@ class DashboardController extends Controller
         $totalDeposit = TradingLog::where('user_id', $userId)->where('type', 'deposit')->sum('profit_loss');
         $totalWithdrawal = TradingLog::where('user_id', $userId)->where('type', 'withdrawal')->sum('profit_loss');
 
-        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'prevMonth', 'nextMonth', 'sort', 'totalDeposit', 'totalWithdrawal'));
+        // 4. Time Analytics — All closed trades in UTC+8
+        $closedTrades = TradingLog::where('user_id', $userId)
+            ->whereIn('type', ['buy_closed', 'sell_closed'])
+            ->whereNotNull('open_time')
+            ->get();
+
+        // --- Per-Hour stats (UTC+8) ---
+        $hourlyStats = [];
+        for ($h = 0; $h < 24; $h++) {
+            $hourlyStats[$h] = ['trades' => 0, 'wins' => 0, 'profit' => 0];
+        }
+        // --- Per-Session stats (UTC+8) ---
+        $sessions = [
+            'Asia'     => ['label' => '🌏 Asia',     'range' => [7, 15],  'trades' => 0, 'wins' => 0, 'profit' => 0],
+            'London'   => ['label' => '🇬🇧 London',   'range' => [15, 23], 'trades' => 0, 'wins' => 0, 'profit' => 0],
+            'NewYork'  => ['label' => '🇺🇸 New York', 'range' => [20, 4],  'trades' => 0, 'wins' => 0, 'profit' => 0],
+        ];
+
+        foreach ($closedTrades as $t) {
+            $hour = \Carbon\Carbon::parse($t->open_time)->timezone('Asia/Jakarta')->hour;
+            $pl   = $t->profit_loss;
+
+            // Hourly
+            $hourlyStats[$hour]['trades']++;
+            $hourlyStats[$hour]['profit'] += $pl;
+            if ($pl > 0) $hourlyStats[$hour]['wins']++;
+
+            // Sessions
+            foreach ($sessions as $key => &$session) {
+                [$start, $end] = $session['range'];
+                $inSession = ($start < $end)
+                    ? ($hour >= $start && $hour < $end)
+                    : ($hour >= $start || $hour < $end); // overnight (e.g. NY 20–04)
+                if ($inSession) {
+                    $session['trades']++;
+                    $session['profit'] += $pl;
+                    if ($pl > 0) $session['wins']++;
+                }
+            }
+            unset($session);
+        }
+
+        // Build hourly chart arrays for JS
+        $hourlyLabels  = array_map(fn($h) => str_pad($h, 2, '0', STR_PAD_LEFT) . ':00', range(0, 23));
+        $hourlyWinRate = array_map(fn($s) => $s['trades'] > 0 ? round($s['wins'] / $s['trades'] * 100, 1) : 0, $hourlyStats);
+        $hourlyProfit  = array_map(fn($s) => round($s['profit'], 2), $hourlyStats);
+        $hourlyTrades  = array_map(fn($s) => $s['trades'], $hourlyStats);
+
+        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'prevMonth', 'nextMonth', 'sort',
+            'totalDeposit', 'totalWithdrawal',
+            'hourlyLabels', 'hourlyWinRate', 'hourlyProfit', 'hourlyTrades', 'sessions'));
     }
 
     public function pendingOrders()

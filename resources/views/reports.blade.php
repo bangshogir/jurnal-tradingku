@@ -207,4 +207,110 @@
 
     </div>
 
+    {{-- TIME ANALYTICS --}}
+    <div class="mt-8">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-9 h-9 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight">⏰ Waktu Terbaik untuk Trading</h3>
+                <p class="text-xs text-slate-400">Berdasarkan waktu buka posisi — Zona WIB (UTC+8)</p>
+            </div>
+        </div>
+
+        {{-- Session Cards --}}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            @foreach ($sessions as $key => $session)
+                @php
+                    $sessWinRate = $session['trades'] > 0 ? round($session['wins'] / $session['trades'] * 100) : 0;
+                    $sessProfit  = round($session['profit'], 2);
+                    $profitColor = $sessProfit >= 0 ? 'text-emerald-600' : 'text-red-500';
+                    $profitSign  = $sessProfit >= 0 ? '+' : '';
+                    $barColor    = $sessWinRate >= 60 ? 'bg-emerald-400' : ($sessWinRate >= 40 ? 'bg-amber-400' : 'bg-red-400');
+                @endphp
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-sm font-bold text-slate-700 mb-3">{{ $session['label'] }}</p>
+                    <div class="flex items-end justify-between mb-2">
+                        <div>
+                            <p class="text-2xl font-bold text-slate-900">{{ $sessWinRate }}%</p>
+                            <p class="text-xs text-slate-400">Win Rate</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-bold {{ $profitColor }}">{{ $profitSign }}${{ number_format(abs($sessProfit), 2) }}</p>
+                            <p class="text-xs text-slate-400">{{ $session['trades'] }} trades</p>
+                        </div>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full {{ $barColor }} rounded-full transition-all" style="width: {{ $sessWinRate }}%"></div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Hourly Win Rate Chart --}}
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <h4 class="text-sm font-bold text-slate-700 mb-1">Win Rate & P/L per Jam (WIB)</h4>
+            <p class="text-xs text-slate-400 mb-4">Hover untuk melihat detail jumlah trade dan P/L tiap jam</p>
+            <div id="hourlyChart"></div>
+        </div>
+    </div>
+
+@push('scripts')
+<script>
+    const hourlyLabels  = @json($hourlyLabels);
+    const hourlyWinRate = @json($hourlyWinRate);
+    const hourlyProfit  = @json($hourlyProfit);
+    const hourlyTrades  = @json($hourlyTrades);
+
+    const options = {
+        series: [
+            { name: 'Win Rate (%)', type: 'bar', data: hourlyWinRate },
+            { name: 'P/L ($)',      type: 'line', data: hourlyProfit },
+        ],
+        chart: {
+            height: 280,
+            type: 'line',
+            toolbar: { show: false },
+            fontFamily: 'Inter, sans-serif',
+        },
+        colors: ['#6366f1', '#10b981'],
+        stroke: { width: [0, 3], curve: 'smooth' },
+        plotOptions: { bar: { borderRadius: 5, columnWidth: '60%' } },
+        fill: { opacity: [0.85, 1] },
+        xaxis: {
+            categories: hourlyLabels,
+            labels: { style: { fontSize: '10px', colors: '#94a3b8' } },
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+        },
+        yaxis: [
+            { title: { text: 'Win Rate (%)', style: { fontSize: '11px', color: '#6366f1' } }, min: 0, max: 100, labels: { formatter: v => v + '%', style: { colors: '#6366f1' } } },
+            { opposite: true, title: { text: 'P/L ($)', style: { fontSize: '11px', color: '#10b981' } }, labels: { formatter: v => '$' + v.toFixed(2), style: { colors: '#10b981' } } },
+        ],
+        tooltip: {
+            shared: true,
+            custom: function({ series, seriesIndex, dataPointIndex, w }) {
+                const hour   = hourlyLabels[dataPointIndex];
+                const wr     = hourlyWinRate[dataPointIndex];
+                const pl     = hourlyProfit[dataPointIndex];
+                const trades = hourlyTrades[dataPointIndex];
+                const plSign = pl >= 0 ? '+' : '';
+                const plColor = pl >= 0 ? '#10b981' : '#ef4444';
+                return `<div style="padding:10px 14px;font-family:Inter,sans-serif;font-size:12px;background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
+                    <p style="font-weight:700;color:#1e293b;margin-bottom:6px">${hour} WIB</p>
+                    <p style="color:#6366f1">Win Rate: <b>${wr}%</b></p>
+                    <p style="color:${plColor}">P/L: <b>${plSign}$${Math.abs(pl).toFixed(2)}</b></p>
+                    <p style="color:#94a3b8">Trades: ${trades}</p>
+                </div>`;
+            }
+        },
+        grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+        legend: { position: 'top', fontSize: '12px' },
+    };
+
+    new ApexCharts(document.getElementById('hourlyChart'), options).render();
+</script>
+@endpush
+
 @endsection

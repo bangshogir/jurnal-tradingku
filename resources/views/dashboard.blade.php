@@ -198,6 +198,7 @@
                         <th class="px-6 py-4 text-left font-medium">Type</th>
                         <th class="px-6 py-4 text-left font-medium">Lot</th>
                         <th class="px-6 py-4 text-left font-medium">Price</th>
+                        <th class="px-6 py-4 text-left font-medium">Strategy</th>
                         <th class="px-6 py-4 text-left font-medium">P/L</th>
                         <th class="px-6 py-4 text-left font-medium">Status</th>
                     </tr>
@@ -240,6 +241,18 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap font-mono text-[12px] text-slate-600">
                                 {{ number_format($trade->entry_price, 5) }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @php
+                                    $strategyLabel = $trade->strategy ?? 'Manual';
+                                    $isMomentum = str_contains($strategyLabel, 'Momentum');
+                                    $stratBadge = $isMomentum
+                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                        : 'bg-slate-50 text-slate-500 border-slate-200';
+                                @endphp
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border {{ $stratBadge }}">
+                                    {{ $isMomentum ? '🚀' : '✏️' }} {{ $strategyLabel }}
+                                </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap font-semibold">
                                 @if ($trade->profit_loss >= 0)

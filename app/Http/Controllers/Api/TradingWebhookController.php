@@ -169,6 +169,14 @@ class TradingWebhookController extends Controller
             if (array_key_exists('magic_number', $validated)) $log->magic_number = $validated['magic_number'];
             if (array_key_exists('comment', $validated)) $log->comment = $validated['comment'];
 
+            // Derive strategy from the comment field
+            $rawComment = $validated['comment'] ?? '';
+            if (str_contains($rawComment, 'MOM_AUTO') || str_contains($rawComment, 'RP_CL_')) {
+                $log->strategy = 'Auto Momentum';
+            } else {
+                $log->strategy = 'Manual';
+            }
+
             $log->save();
 
             // TELEGRAM NOTIFICATION

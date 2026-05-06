@@ -26,6 +26,7 @@ class TradingLog extends Model
         'commission',
         'magic_number',
         'comment',
+        'strategy',
     ];
 
     protected $casts = [
