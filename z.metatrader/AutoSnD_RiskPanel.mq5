@@ -55,7 +55,7 @@ input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
-input double InpMomBaseProximityATR = 2.0;   // Toleransi jarak Momentum ke Base (x ATR)
+input int    InpMomMaxCandlesAfterBase = 2;  // Maks jarak candle dari Base ke Momentum (untuk auto order)
 
 
 //=====================================================================
@@ -72,7 +72,8 @@ struct ZoneData
    bool     is_demand;
    double   top;
    double   btm;
-   datetime start_time;
+   datetime start_time; // Candle pertama (tertua / kiri) dari Base
+   datetime end_time;   // Candle terakhir (terbaru / kanan) dari Base
    bool     active;
    ENUM_ZONE_TYPE type;
   };
@@ -690,7 +691,7 @@ void ResyncHistory()
 //=====================================================================
 
 // ---- Zone Drawing (from SnD_Zone.mq5) ----
-void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_ZONE_TYPE ztype=ZONE_RBD_DBR)
+void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_ZONE_TYPE ztype=ZONE_RBD_DBR, datetime end_time=0)
   {
    if(g_zone_count >= MAX_ZONES) return;
    
@@ -704,23 +705,25 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
      {
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
         { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,fill_box); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
-      double center_price = top - ((top - btm) / 2.0); // Kalkulasi presisi titik tengah secara vertikal
+      double center_price = top - ((top - btm) / 2.0);
       datetime right_edge = TimeCurrent();
-      datetime mid_time = (datetime)(((long)start_time + (long)right_edge) / 2); // Kalkulasi titik tengah secara horizontal
+      datetime mid_time = (datetime)(((long)start_time + (long)right_edge) / 2);
       string pinfo="SnD_PI_"+uid;
       string price_txt = DoubleToString(top,_Digits) + " / " + DoubleToString(btm,_Digits);
       if(ObjectCreate(0,pinfo,OBJ_TEXT,0,mid_time,center_price)) { 
           ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt); 
           ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack); 
-          ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,6); // Perkecil ukuran font teks harga
-          ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER); // Memaku posisi jangkar teks TEPAT di titik pusatnya
+          ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,6);
+          ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER);
           ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false); 
           ObjectSetInteger(0,pinfo,OBJPROP_BACK,false); 
       }
      }
    
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=""; g_zones[g_zone_count].lbl_top=show_visual ? "SnD_PI_"+uid : ""; g_zones[g_zone_count].lbl_btm="";
-   g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm; g_zones[g_zone_count].start_time=start_time;
+   g_zones[g_zone_count].is_demand=is_demand; g_zones[g_zone_count].top=top; g_zones[g_zone_count].btm=btm;
+   g_zones[g_zone_count].start_time=start_time;
+   g_zones[g_zone_count].end_time = (end_time > 0) ? end_time : start_time; // Default ke start_time jika tidak disetel
    g_zones[g_zone_count].active=true;
    g_zones[g_zone_count].type=ztype;
    g_zone_count++;
@@ -830,40 +833,35 @@ void CheckMitigation(int shift)
      }
   }
 
-// ---- Filter: Apakah Momentum Candle lahir dari area Original Zone (RBR/DBD)? ----
-bool IsMomentumNearBase(bool isBullish, int shift) {
-   double atr[];
-   if(CopyBuffer(g_atr_handle, 0, shift, 1, atr) <= 0) return false;
-   double tolerance = atr[0] * InpMomBaseProximityATR;
-   
+// ---- Filter: Momentum Candle wajib muncul dalam N candle setelah candle terakhir Base ----
+bool IsMomentumAfterBase(bool isBullish, int shift, double &out_sl_level) {
    datetime candle_time = iTime(_Symbol, _Period, shift);
-   double   candle_low  = iLow(_Symbol,  _Period, shift);
-   double   candle_high = iHigh(_Symbol, _Period, shift);
+   double   pt          = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    
    for(int i = 0; i < g_zone_count; i++) {
       if(!g_zones[i].active)                    continue; // Hanya zona masih aktif
       if(g_zones[i].type != ZONE_RBR_DBD)       continue; // Hanya Original Zone
-      if(g_zones[i].start_time >= candle_time)  continue; // Zona harus lahir SEBELUM candle
+      if(isBullish  && !g_zones[i].is_demand)   continue; // Bullish → cari Demand
+      if(!isBullish &&  g_zones[i].is_demand)   continue; // Bearish → cari Supply
+      if(g_zones[i].end_time >= candle_time)    continue; // Base harus selesai SEBELUM candle momentum
       
-      if(isBullish) {
-         // Demand Zone: Low momentum candle berada di dalam atau dekat atas zona
-         if(g_zones[i].is_demand &&
-            candle_low >= g_zones[i].btm - tolerance &&
-            candle_low <= g_zones[i].top + tolerance)
-            return true;
-      } else {
-         // Supply Zone: High momentum candle berada di dalam atau dekat bawah zona
-         if(!g_zones[i].is_demand &&
-            candle_high <= g_zones[i].top + tolerance &&
-            candle_high >= g_zones[i].btm - tolerance)
-            return true;
+      // Hitung jarak candle dari UJUNG (candle terakhir) Base ke candle momentum
+      int end_bar    = iBarShift(_Symbol, _Period, g_zones[i].end_time);
+      int distance   = end_bar - shift; // Berapa candle ke kanan dari akhir base
+      
+      if(distance >= 0 && distance <= InpMomMaxCandlesAfterBase) {
+         // SL dipasang di BATAS ZONA, bukan di wick candle momentum
+         out_sl_level = isBullish
+            ? NormalizeDouble(g_zones[i].btm - InpBufferPoints * pt, _Digits) // Bawah Demand Zone
+            : NormalizeDouble(g_zones[i].top + InpBufferPoints * pt, _Digits); // Atas Supply Zone
+         return true;
       }
    }
    return false;
 }
 
 // ---- Auto Momentum Trade Execution ----
-void ExecuteMomentumAutoTrade(bool isBullish, int shift)
+void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL = 0)
   {
    if(!InpEnableAutoMomentum) return;
    
@@ -872,10 +870,14 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift)
    double high   = iHigh(_Symbol, _Period, shift);
    double low    = iLow(_Symbol, _Period, shift);
    
-   // SL: ujung wick momentum candle +/- buffer
-   double stopLoss = isBullish
-                   ? NormalizeDouble(low  - InpBufferPoints * pt, digits)
-                   : NormalizeDouble(high + InpBufferPoints * pt, digits);
+   // SL: gunakan custom SL dari zona jika tersedia, fallback ke wick candle + buffer
+   double stopLoss;
+   if(customSL > 0)
+      stopLoss = customSL;
+   else
+      stopLoss = isBullish
+               ? NormalizeDouble(low  - InpBufferPoints * pt, digits)
+               : NormalizeDouble(high + InpBufferPoints * pt, digits);
    
    // Entry: harga pasar saat ini
    double ask   = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
@@ -1145,7 +1147,8 @@ void CheckContinuationZone(int shift) {
          if(g_zones[z].start_time == st && g_zones[z].type == ZONE_RBR_DBD) return;
       }
       
-      DrawZone(is_bull_rally, top, btm, st, ZONE_RBR_DBD);
+      datetime et = iTime(_Symbol, _Period, best_base_end); // Waktu candle TERAKHIR (terkanan) base
+      DrawZone(is_bull_rally, top, btm, st, ZONE_RBR_DBD, et);
    }
 }
 
@@ -1213,10 +1216,12 @@ void OnTick()
       
       if(isBullMom) {
          DrawMomentumArrow(true, 1);
-         if(IsMomentumNearBase(true,  1)) ExecuteMomentumAutoTrade(true,  1);
+         double sl_zone = 0;
+         if(IsMomentumAfterBase(true, 1, sl_zone)) ExecuteMomentumAutoTrade(true, 1, sl_zone);
       } else if(isBearMom) {
          DrawMomentumArrow(false, 1);
-         if(IsMomentumNearBase(false, 1)) ExecuteMomentumAutoTrade(false, 1);
+         double sl_zone = 0;
+         if(IsMomentumAfterBase(false, 1, sl_zone)) ExecuteMomentumAutoTrade(false, 1, sl_zone);
       }
       
       g_last_processed_bar = currentBarTime;
