@@ -31,6 +31,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports', [DashboardController::class, 'reports'])->name('dashboard.reports');
     Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
     Route::post('/profile/telegram', [DashboardController::class, 'updateTelegram'])->name('profile.telegram');
+    Route::delete('/trades/{id}/dismiss', [DashboardController::class, 'dismissTrade'])->name('trades.dismiss');
 
     // Telegram Routing endpoints
     Route::post('/telegram-routings', [TelegramRoutingController::class, 'store'])->name('telegram-routings.store');

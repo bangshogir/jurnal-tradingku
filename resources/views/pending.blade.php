@@ -8,7 +8,10 @@
 
     {{-- Pending Orders Table / Last Sales style --}}
     <div class="mb-4 flex items-center justify-between mt-2">
-        <h2 class="text-lg font-bold text-slate-900 tracking-tight">Pending Orders</h2>
+        <div>
+            <h2 class="text-lg font-bold text-slate-900 tracking-tight">Pending Orders</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Gunakan tombol 🗑️ Hapus jika data lama tidak sinkron dengan MT5</p>
+        </div>
         <div class="flex gap-2">
             <button onclick="window.location.reload()"
                 class="bg-white border border-slate-200 text-slate-600 text-[11px] font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
@@ -86,10 +89,11 @@
                                         class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 text-amber-600 font-semibold text-[11px] border border-amber-100">
                                         <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending
                                     </span>
-                                    <button class="text-slate-400 hover:text-slate-600">
+                                    <button onclick="confirmDismiss({{ $trade->id }}, '{{ $trade->symbol }}', '#{{ $trade->ticket_id }}')"
+                                        class="text-red-300 hover:text-red-500 transition-colors" title="Hapus dari jurnal">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z">
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
                                             </path>
                                         </svg>
                                     </button>
@@ -114,5 +118,55 @@
             </table>
         </div>
     </div>
+
+    {{-- Flash Messages --}}
+    @if (session('success'))
+        <div class="fixed bottom-5 right-5 z-50 bg-emerald-500 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            {{ session('success') }}
+        </div>
+    @endif
+
+    {{-- Confirm Delete Modal --}}
+    <div id="dismissModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900">Hapus dari Jurnal?</h3>
+                    <p class="text-xs text-slate-400">Aksi ini tidak dapat dibatalkan</p>
+                </div>
+            </div>
+            <p class="text-sm text-slate-600 mb-5" id="dismissModalText">Apakah Anda yakin ingin menghapus trade ini dari jurnal?</p>
+            <div class="flex gap-3">
+                <button onclick="closeDismissModal()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors">Batal</button>
+                <form id="dismissForm" method="POST">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors">Ya, Hapus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+@push('scripts')
+<script>
+    function confirmDismiss(id, symbol, ticket) {
+        document.getElementById('dismissModalText').textContent =
+            `Hapus trade ${symbol} ${ticket} dari jurnal? Trade ini sudah tidak ada di MT5.`;
+        document.getElementById('dismissForm').action = `/trades/${id}/dismiss`;
+        document.getElementById('dismissModal').classList.remove('hidden');
+    }
+    function closeDismissModal() {
+        document.getElementById('dismissModal').classList.add('hidden');
+    }
+    // Close on backdrop click
+    document.getElementById('dismissModal').addEventListener('click', function(e) {
+        if (e.target === this) closeDismissModal();
+    });
+</script>
+@endpush
 
 @endsection

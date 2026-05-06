@@ -393,4 +393,18 @@ class DashboardController extends Controller
 
         return redirect()->back()->with('success', 'Telegram Chat ID updated successfully.');
     }
+
+    public function dismissTrade(Request $request, $id)
+    {
+        $trade = TradingLog::where('user_id', Auth::id())->findOrFail($id);
+
+        // Hanya izinkan dismiss untuk pending/open yang nyangkut (bukan history closed)
+        $dismissible = ['buy', 'sell', 'buy_limit', 'sell_limit', 'buy_stop', 'sell_stop', 'unknown_pending'];
+        if (!in_array($trade->type, $dismissible)) {
+            return redirect()->back()->with('error', 'Trade ini tidak bisa dihapus manual.');
+        }
+
+        $trade->delete();
+        return redirect()->back()->with('success', "Trade #{$trade->ticket_id} ({$trade->symbol}) berhasil dihapus dari jurnal.");
+    }
 }
