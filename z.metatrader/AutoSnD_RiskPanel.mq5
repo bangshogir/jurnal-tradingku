@@ -55,6 +55,7 @@ input double InpBodyPercentage = 0.75;       // Min body ratio (75%)
 input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
+input double InpMomBaseProximityATR = 2.0;   // Toleransi jarak Momentum ke Base (x ATR)
 
 
 //=====================================================================
@@ -829,6 +830,38 @@ void CheckMitigation(int shift)
      }
   }
 
+// ---- Filter: Apakah Momentum Candle lahir dari area Original Zone (RBR/DBD)? ----
+bool IsMomentumNearBase(bool isBullish, int shift) {
+   double atr[];
+   if(CopyBuffer(g_atr_handle, 0, shift, 1, atr) <= 0) return false;
+   double tolerance = atr[0] * InpMomBaseProximityATR;
+   
+   datetime candle_time = iTime(_Symbol, _Period, shift);
+   double   candle_low  = iLow(_Symbol,  _Period, shift);
+   double   candle_high = iHigh(_Symbol, _Period, shift);
+   
+   for(int i = 0; i < g_zone_count; i++) {
+      if(!g_zones[i].active)                    continue; // Hanya zona masih aktif
+      if(g_zones[i].type != ZONE_RBR_DBD)       continue; // Hanya Original Zone
+      if(g_zones[i].start_time >= candle_time)  continue; // Zona harus lahir SEBELUM candle
+      
+      if(isBullish) {
+         // Demand Zone: Low momentum candle berada di dalam atau dekat atas zona
+         if(g_zones[i].is_demand &&
+            candle_low >= g_zones[i].btm - tolerance &&
+            candle_low <= g_zones[i].top + tolerance)
+            return true;
+      } else {
+         // Supply Zone: High momentum candle berada di dalam atau dekat bawah zona
+         if(!g_zones[i].is_demand &&
+            candle_high <= g_zones[i].top + tolerance &&
+            candle_high >= g_zones[i].btm - tolerance)
+            return true;
+      }
+   }
+   return false;
+}
+
 // ---- Auto Momentum Trade Execution ----
 void ExecuteMomentumAutoTrade(bool isBullish, int shift)
   {
@@ -1178,8 +1211,13 @@ void OnTick()
       bool isBullMom = IsBullishMomentum(1);
       bool isBearMom = IsBearishMomentum(1);
       
-      if(isBullMom)      { DrawMomentumArrow(true,  1); ExecuteMomentumAutoTrade(true,  1); }
-      else if(isBearMom) { DrawMomentumArrow(false, 1); ExecuteMomentumAutoTrade(false, 1); }
+      if(isBullMom) {
+         DrawMomentumArrow(true, 1);
+         if(IsMomentumNearBase(true,  1)) ExecuteMomentumAutoTrade(true,  1);
+      } else if(isBearMom) {
+         DrawMomentumArrow(false, 1);
+         if(IsMomentumNearBase(false, 1)) ExecuteMomentumAutoTrade(false, 1);
+      }
       
       g_last_processed_bar = currentBarTime;
      }
