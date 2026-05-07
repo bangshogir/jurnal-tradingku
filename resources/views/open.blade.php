@@ -62,15 +62,15 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-500">
-                                {{ $trade->open_time ? $trade->open_time->format('d M Y') : '-' }}
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-500 text-[11px] font-medium">
+                                {{ $trade->open_time ? $trade->open_time->format('j/n/Y') : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
                                     $typeStr = strtolower($trade->type);
-                                    $typeLabel = str_replace('_', ' ', $typeStr);
                                     $isBuy = str_contains($typeStr, 'buy');
                                     $isSell = str_contains($typeStr, 'sell');
+                                    $typeLabel = $isBuy ? 'Buy' : ($isSell ? 'Sell' : 'Other');
                                     $badgeClass = $isBuy
                                         ? 'text-blue-700 bg-blue-50 border-blue-200'
                                         : ($isSell

@@ -221,14 +221,15 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-500">
-                                {{ $trade->open_time ? $trade->open_time->format('d M Y') : '-' }}
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-500 text-[11px] font-medium">
+                                {{ $trade->open_time ? $trade->open_time->format('j/n/Y') : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
                                     $typeStr = strtolower($trade->type);
-                                    $typeLabel = str_replace('_', ' ', $typeStr);
                                     $isBuy = str_contains($typeStr, 'buy');
+                                    $isSell = str_contains($typeStr, 'sell');
+                                    $typeLabel = $isBuy ? 'Buy' : ($isSell ? 'Sell' : 'Other');
                                     $isSell = str_contains($typeStr, 'sell');
                                     $badgeClass = $isBuy
                                         ? 'text-blue-700 bg-blue-50 border-blue-200'
@@ -273,10 +274,19 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center gap-2">
-                                    <span
-                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-600 font-semibold text-[11px] border border-emerald-100">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Completed
-                                    </span>
+                                    @if($trade->profit_loss > 0)
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-600 font-semibold text-[11px] border border-emerald-100">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Win
+                                        </span>
+                                    @elseif($trade->profit_loss < 0)
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 text-rose-600 font-semibold text-[11px] border border-rose-100">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Loss
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-slate-600 font-semibold text-[11px] border border-slate-200">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> BEP
+                                        </span>
+                                    @endif
                                     <button class="text-slate-400 hover:text-slate-600">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
