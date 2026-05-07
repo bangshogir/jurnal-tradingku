@@ -27,6 +27,7 @@ class TradingLog extends Model
         'magic_number',
         'comment',
         'strategy',
+        'timeframe',
     ];
 
     protected $casts = [

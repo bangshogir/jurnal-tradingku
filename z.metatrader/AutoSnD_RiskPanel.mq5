@@ -17,6 +17,13 @@
 
 CTrade ExtTrade;
 
+// Helper to get clean timeframe string (e.g. PERIOD_M15 -> M15)
+string GetTFString() {
+   string tf = EnumToString(_Period);
+   StringReplace(tf, "PERIOD_", "");
+   return tf;
+}
+
 //=====================================================================
 // [1] INPUT PARAMETERS
 //=====================================================================
@@ -296,12 +303,13 @@ public:
       double tp = 0; bool result = false;
       if(m_cl_active) {
          double backup = is_buy ? NormalizeDouble(entry - diff * 2.0, digits) : NormalizeDouble(entry + diff * 2.0, digits);
-         string clc = "RP_CL_" + DoubleToString(sl, digits);
+         string clc = "RP_CL_" + DoubleToString(sl, digits) + "[" + GetTFString() + "]";
          if(is_buy) { tp = NormalizeDouble(entry + diff * mult, digits); result = (entry < ask) ? ExtTrade.BuyLimit(lot, entry, _Symbol, backup, tp, ORDER_TIME_GTC, 0, clc)  : ExtTrade.BuyStop(lot, entry, _Symbol, backup, tp, ORDER_TIME_GTC, 0, clc); }
          else       { tp = NormalizeDouble(entry - diff * mult, digits); result = (entry > bid) ? ExtTrade.SellLimit(lot, entry, _Symbol, backup, tp, ORDER_TIME_GTC, 0, clc) : ExtTrade.SellStop(lot, entry, _Symbol, backup, tp, ORDER_TIME_GTC, 0, clc); }
       } else {
-         if(is_buy) { tp = NormalizeDouble(entry + diff * mult, digits); result = (entry < ask) ? ExtTrade.BuyLimit(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "RP")  : ExtTrade.BuyStop(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "RP"); }
-         else       { tp = NormalizeDouble(entry - diff * mult, digits); result = (entry > bid) ? ExtTrade.SellLimit(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "RP") : ExtTrade.SellStop(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "RP"); }
+         string rpc = "RP[" + GetTFString() + "]";
+         if(is_buy) { tp = NormalizeDouble(entry + diff * mult, digits); result = (entry < ask) ? ExtTrade.BuyLimit(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, rpc)  : ExtTrade.BuyStop(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, rpc); }
+         else       { tp = NormalizeDouble(entry - diff * mult, digits); result = (entry > bid) ? ExtTrade.SellLimit(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, rpc) : ExtTrade.SellStop(lot, entry, _Symbol, sl, tp, ORDER_TIME_GTC, 0, rpc); }
       }
       SetStatus(result ? "Order Manual Dipasang" : "Gagal Pasang Order");
    }
@@ -342,6 +350,7 @@ public:
       double tp = is_buy ? NormalizeDouble(entry + diff * mult, digits) : NormalizeDouble(entry - diff * mult, digits);
       bool result = false;
       string comm = m_cl_active ? ("RP_CL_" + DoubleToString(sl, digits)) : "RP_MKT";
+      comm = comm + "[" + GetTFString() + "]";
       double hard_sl = sl;
       if (m_cl_active) hard_sl = is_buy ? NormalizeDouble(entry - diff * 2.0, digits) : NormalizeDouble(entry + diff * 2.0, digits);
       
@@ -909,10 +918,10 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL = 0)
    
    // Gunakan Soft CL jika aktif (hard SL lebih jauh, komentar menyimpan level cut)
    double hardSL = stopLoss;
-   string comm   = "MOM_AUTO";
+   string comm   = "MOM_AUTO[" + GetTFString() + "]";
    if(ExtPanel.m_cl_active)
      {
-      comm   = "RP_CL_" + DoubleToString(stopLoss, digits);
+      comm   = "RP_CL_" + DoubleToString(stopLoss, digits) + "[" + GetTFString() + "]";
       hardSL = isBullish
              ? NormalizeDouble(entry - diff * 2.0, digits)
              : NormalizeDouble(entry + diff * 2.0, digits);

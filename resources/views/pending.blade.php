@@ -52,7 +52,12 @@
                                     <input type="checkbox"
                                         class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                                     <div>
-                                        <p class="font-semibold text-slate-800 tracking-tight">{{ $trade->symbol }}</p>
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-semibold text-slate-800 tracking-tight">{{ $trade->symbol }}</p>
+                                            @if($trade->timeframe)
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">{{ $trade->timeframe }}</span>
+                                            @endif
+                                        </div>
                                         <p class="text-[11px] text-slate-400">#{{ $trade->ticket_id }}</p>
                                     </div>
                                 </div>

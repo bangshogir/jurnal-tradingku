@@ -171,10 +171,22 @@ class TradingWebhookController extends Controller
 
             // Derive strategy from the comment field
             $rawComment = $validated['comment'] ?? '';
+            
+            // Clean strategy assignment based on string fragments
             if (str_contains($rawComment, 'MOM_AUTO') || str_contains($rawComment, 'RP_CL_')) {
                 $log->strategy = 'Auto Momentum';
             } else {
                 $log->strategy = 'Manual';
+            }
+            
+            // Extract timeframe from the comment (e.g. MOM_AUTO[M15] -> timeframe = M15)
+            // Save it only on create or if not already set, or strictly keep it updated?
+            // Actually, keep it synced with the comment
+            if (preg_match('/\[([A-Z0-9]+)\]/', $rawComment, $matches)) {
+                $log->timeframe = $matches[1];
+                
+                // Clean the comment string internally or keep it intact? 
+                // We keep it intact so MT5's exact behavior remains trackable
             }
 
             $log->save();
