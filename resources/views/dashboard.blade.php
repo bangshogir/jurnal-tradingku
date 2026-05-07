@@ -197,7 +197,7 @@
                         <th class="px-6 py-4 text-left font-medium">Date</th>
                         <th class="px-6 py-4 text-left font-medium">Type</th>
                         <th class="px-6 py-4 text-left font-medium">Lot</th>
-                        <th class="px-6 py-4 text-left font-medium">Price</th>
+                        <th class="px-6 py-4 text-left font-medium">R. Rasio</th>
                         <th class="px-6 py-4 text-left font-medium">Strategy</th>
                         <th class="px-6 py-4 text-left font-medium">P/L</th>
                         <th class="px-6 py-4 text-left font-medium">Status</th>
@@ -246,12 +246,13 @@
                                 {{ number_format($trade->lot_size, 2) }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap font-mono text-[12px] text-slate-600">
-                                <div class="flex flex-col gap-1.5">
-                                    <span>{{ number_format($trade->entry_price, 5) }}</span>
-                                    @if($trade->rr_ratio)
-                                        <span class="text-[9.5px] font-sans font-bold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded w-max tracking-wide">RR {{ $trade->rr_ratio }}</span>
-                                    @endif
-                                </div>
+                                @if($trade->rr_ratio)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 whitespace-nowrap">
+                                        {{ $trade->rr_ratio }}
+                                    </span>
+                                @else
+                                    <span class="text-slate-400 text-xs">-</span>
+                                @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
