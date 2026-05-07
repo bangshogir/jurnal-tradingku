@@ -39,4 +39,19 @@ class TradingLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function getRrRatioAttribute()
+    {
+        if (empty($this->entry_price) || empty($this->sl_price) || empty($this->tp_price)) {
+            return null;
+        }
+
+        $risk = abs($this->entry_price - $this->sl_price);
+        $reward = abs($this->tp_price - $this->entry_price);
+
+        if ($risk == 0) return null;
+
+        $ratio = round($reward / $risk, 1);
+        return "1:{$ratio}";
+    }
 }

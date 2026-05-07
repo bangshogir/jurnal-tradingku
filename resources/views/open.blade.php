@@ -86,7 +86,12 @@
                                 {{ number_format($trade->lot_size, 2) }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap font-mono text-[12px] text-slate-600">
-                                {{ number_format($trade->entry_price, 5) }}
+                                <div class="flex flex-col gap-1.5">
+                                    <span>{{ number_format($trade->entry_price, 5) }}</span>
+                                    @if($trade->rr_ratio)
+                                        <span class="text-[9.5px] font-sans font-bold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded w-max tracking-wide">RR {{ $trade->rr_ratio }}</span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center gap-2">

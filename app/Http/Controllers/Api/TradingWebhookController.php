@@ -158,8 +158,8 @@ class TradingWebhookController extends Controller
             // Optional fields (Only update if they were provided in the payload to prevent wiping out data)
             if (array_key_exists('entry_price', $validated)) $log->entry_price = $validated['entry_price'];
             if (array_key_exists('close_price', $validated)) $log->close_price = $validated['close_price'];
-            if (array_key_exists('sl_price', $validated)) $log->sl_price = $validated['sl_price'];
-            if (array_key_exists('tp_price', $validated)) $log->tp_price = $validated['tp_price'];
+            if (array_key_exists('sl_price', $validated) && $validated['sl_price'] > 0) $log->sl_price = $validated['sl_price'];
+            if (array_key_exists('tp_price', $validated) && $validated['tp_price'] > 0) $log->tp_price = $validated['tp_price'];
             if (array_key_exists('lot_size', $validated)) $log->lot_size = $validated['lot_size'];
             if (array_key_exists('profit_loss', $validated)) $log->profit_loss = $validated['profit_loss'];
             if (array_key_exists('open_time', $validated)) $log->open_time = $validated['open_time'];
