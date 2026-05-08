@@ -154,15 +154,7 @@
                                             <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> BEP
                                         </span>
                                     @endif
-                                    <form method="POST" action="{{ route('trades.dismiss', $trade->id) }}" class="inline" id="dismiss-form-{{ $trade->id }}">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="button" onclick="confirmDismiss({{ $trade->id }}, '{{ $trade->symbol }}', '#{{ $trade->ticket_id }}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Hapus dari jurnal">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                            </svg>
-                                        </button>
-                                    </form>
+
                                 </div>
                             </td>
                         </tr>
@@ -196,24 +188,5 @@
         @endif
     </div>
 
-    {{-- Script for delete confirmation --}}
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        function confirmDismiss(id, symbol, ticket) {
-            Swal.fire({
-                title: 'Hapus Trade?',
-                text: "Data " + symbol + " (" + ticket + ") tidak akan dihitung lagi di statistik. Anda tidak dapat mengembalikannya!",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: 'Ya, Hapus!',
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    document.getElementById('dismiss-form-' + id).submit();
-                }
-            })
-        }
-    </script>
+
 @endsection
