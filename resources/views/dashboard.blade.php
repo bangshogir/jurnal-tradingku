@@ -152,6 +152,15 @@
         @endforeach
     </dl>
 
+    {{-- Hourly Win Rate Chart --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8">
+        <div class="flex items-center justify-between mb-1">
+            <h4 class="text-sm font-bold text-slate-700">Win Rate & P/L per Jam (WIB)</h4>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Hover untuk melihat detail jumlah trade dan P/L tiap jam</p>
+        <div id="hourlyChart"></div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {{-- CALENDAR HEATMAP --}}
@@ -374,14 +383,6 @@
             @endforeach
         </div>
 
-        {{-- Hourly Win Rate Chart --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <div class="flex items-center justify-between mb-1">
-                <h4 class="text-sm font-bold text-slate-700">Win Rate & P/L per Jam (WIB)</h4>
-            </div>
-            <p class="text-xs text-slate-400 mb-4">Hover untuk melihat detail jumlah trade dan P/L tiap jam</p>
-            <div id="hourlyChart"></div>
-        </div>
     </div>
 
 @push('scripts')
