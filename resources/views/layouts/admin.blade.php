@@ -214,6 +214,14 @@
                 @if (!auth()->user()->isAdmin())
                     <div class="sidebar-section-label">Trading Menu</div>
 
+                    <a href="{{ route('dashboard.history') }}"
+                        class="sidebar-link {{ request()->routeIs('dashboard.history') ? 'active' : '' }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        History
+                    </a>
+
                     <a href="{{ route('dashboard.open') }}"
                         class="sidebar-link {{ request()->routeIs('dashboard.open') ? 'active' : '' }}">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">

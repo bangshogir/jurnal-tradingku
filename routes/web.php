@@ -26,6 +26,7 @@ Route::middleware(['auth'])->group(function () {
         return redirect()->route('dashboard');
     });
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/history', [DashboardController::class, 'history'])->name('dashboard.history');
     Route::get('/pending', [DashboardController::class, 'pendingOrders'])->name('dashboard.pending');
     Route::get('/open', [DashboardController::class, 'openOrders'])->name('dashboard.open');
     Route::get('/reports', [DashboardController::class, 'reports'])->name('dashboard.reports');
