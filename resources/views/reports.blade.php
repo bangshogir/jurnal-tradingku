@@ -29,15 +29,62 @@
         </div>
     </div>
 
-    {{-- Empty State Info --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-10 text-center flex flex-col items-center justify-center">
-        <svg class="w-16 h-16 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-        <h3 class="text-lg font-bold text-slate-800 mb-2">Semua fitur Analitik telah dipindahkan ke Dashboard</h3>
-        <p class="text-slate-500 max-w-sm text-sm">Untuk pengalaman yang lebih baik, laporan statistik Pair, grafik Win Rate, dan data P/L harian kini tergabung dalam satu ringkasan komprehensif di halaman utama (Dashboard).</p>
-        <a href="{{ route('dashboard') }}" class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-brand-500/30">
-            Ke Halaman Dashboard
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-        </a>
+    {{-- TRANSACTIONS TABLE --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-900 tracking-tight">Riwayat Transaksi</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                        <th class="p-4 pl-6">Tanggal</th>
+                        <th class="p-4">Tipe</th>
+                        <th class="p-4 text-center">Ticket</th>
+                        <th class="p-4 w-1/3">Catatan</th>
+                        <th class="p-4 pr-6 text-right">Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @forelse($transactions as $trx)
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 pl-6 text-[13px] font-medium text-slate-600">
+                                {{ \Carbon\Carbon::parse($trx->close_time ?? $trx->open_time ?? $trx->created_at)->format('j/n/Y') }}
+                            </td>
+                            <td class="p-4">
+                                <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider {{ $trx->type == 'deposit' ? 'bg-emerald-100/50 text-emerald-700' : 'bg-rose-100/50 text-rose-700' }}">
+                                    {{ $trx->type }}
+                                </span>
+                            </td>
+                            <td class="p-4 text-[12px] font-mono text-slate-400 text-center">
+                                #{{ $trx->ticket_id }}
+                            </td>
+                            <td class="p-4 text-[13px] text-slate-500 max-w-[200px] truncate" title="{{ $trx->comment }}">
+                                {{ $trx->comment ?? '-' }}
+                            </td>
+                            <td class="p-4 pr-6 text-right text-sm font-bold {{ $trx->type == 'deposit' ? 'text-emerald-600' : 'text-rose-600' }}">
+                                {{ $trx->type == 'deposit' ? '+' : '-' }}${{ number_format(abs($trx->profit_loss), 2) }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="p-8 text-center text-slate-500">
+                                <div class="flex flex-col items-center justify-center gap-2">
+                                    <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <p class="text-sm">Belum ada riwayat deposit atau penarikan.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        
+        @if($transactions->hasPages())
+        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+            {{ $transactions->links() }}
+        </div>
+        @endif
     </div>
 
 @endsection

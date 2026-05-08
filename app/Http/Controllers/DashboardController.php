@@ -415,11 +415,16 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        // Only keeping All-Time Deposit and Withdrawal
         $totalDeposit = TradingLog::where('user_id', $userId)->where('type', 'deposit')->sum('profit_loss');
         $totalWithdrawal = TradingLog::where('user_id', $userId)->where('type', 'withdrawal')->sum('profit_loss');
 
-        return view('reports', compact('totalDeposit', 'totalWithdrawal'));
+        // Fetch transaction history (deposits & withdrawals) with pagination
+        $transactions = TradingLog::where('user_id', $userId)
+            ->whereIn('type', ['deposit', 'withdrawal'])
+            ->orderByRaw('COALESCE(close_time, open_time, created_at) DESC')
+            ->paginate(15);
+
+        return view('reports', compact('totalDeposit', 'totalWithdrawal', 'transactions'));
     }
 
     public function pendingOrders()
