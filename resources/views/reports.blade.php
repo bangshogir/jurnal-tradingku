@@ -1,316 +1,43 @@
 @extends('layouts.admin')
 
 @section('title', 'Reports')
-@section('page-title', 'Trading Reports')
-@section('page-subtitle', 'Analisa performa trading Anda (Proit/Loss Harian & Statistik Pair)')
+@section('page-title', 'Financial Reports')
+@section('page-subtitle', 'Laporan deposit dan penarikan dana Anda')
 
 @section('content')
 
     {{-- DEPOSIT & WITHDRAWAL STATS --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-8">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <div class="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center shrink-0">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 hover:shadow-md transition-shadow">
+            <div class="w-14 h-14 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             </div>
             <div>
-                <p class="text-sm font-medium text-slate-500 mb-1">Total Deposit (All Time)</p>
-                <h4 class="text-3xl font-bold text-slate-900">${{ number_format($totalDeposit, 2) }}</h4>
+                <p class="text-sm font-semibold text-slate-500 mb-1 tracking-wide uppercase">Total Deposit (All Time)</p>
+                <h4 class="text-3xl font-black text-slate-900 tracking-tight">${{ number_format($totalDeposit, 2) }}</h4>
             </div>
         </div>
         
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <div class="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 hover:shadow-md transition-shadow">
+            <div class="w-14 h-14 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center shrink-0">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
             </div>
             <div>
-                <p class="text-sm font-medium text-slate-500 mb-1">Total Withdrawal (All Time)</p>
-                <h4 class="text-3xl font-bold text-slate-900">-${{ number_format(abs($totalWithdrawal), 2) }}</h4>
+                <p class="text-sm font-semibold text-slate-500 mb-1 tracking-wide uppercase">Total Withdrawal (All Time)</p>
+                <h4 class="text-3xl font-black text-slate-900 tracking-tight">-${{ number_format(abs($totalWithdrawal), 2) }}</h4>
             </div>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-        {{-- CALENDAR HEATMAP --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 overflow-hidden">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight">Daily Profit/Loss</h3>
-                <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1 shadow-sm">
-                    <a href="{{ route('dashboard.reports', ['month' => $prevMonth->month, 'year' => $prevMonth->year, 'sort' => $sort]) }}" 
-                       class="p-1.5 rounded hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-700 transition-all" title="Previous Month">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                    </a>
-                    <span class="text-sm font-bold text-slate-700 min-w-[110px] text-center select-none">{{ $startOfMonth->format('F Y') }}</span>
-                    <a href="{{ route('dashboard.reports', ['month' => $nextMonth->month, 'year' => $nextMonth->year, 'sort' => $sort]) }}" 
-                       class="p-1.5 rounded hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-700 transition-all" title="Next Month">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                    </a>
-                </div>
-            </div>
-            
-            @php
-                $daysInMonth = $startOfMonth->daysInMonth;
-                $firstDayOfWeek = $startOfMonth->dayOfWeekIso; // 1 (Mon) to 7 (Sun)
-                $currentDay = 1;
-            @endphp
-
-            <div class="w-full">
-                <div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Mon</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Tue</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Wed</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Thu</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Fri</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Sat</div>
-                    <div class="text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Sun</div>
-                </div>
-
-                <div class="grid grid-cols-7 gap-1 sm:gap-2">
-                    {{-- Empty slots before the 1st of the month --}}
-                    @for ($i = 1; $i < $firstDayOfWeek; $i++)
-                        <div class="aspect-square bg-slate-50 rounded-lg"></div>
-                    @endfor
-
-                    {{-- Days of the month --}}
-                    @for ($i = 1; $i <= $daysInMonth; $i++)
-                        @php
-                            $dateString = $startOfMonth->copy()->addDays($i - 1)->format('Y-m-d');
-                            $profit = $dailyTrades[$dateString] ?? null;
-                            
-                            $bgColor = 'bg-slate-100 hover:bg-slate-200';
-                            $textColor = 'text-slate-500';
-                            $profitText = '-';
-
-                            if (is_numeric($profit)) {
-                                if ($profit > 0) {
-                                    $bgColor = 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-200';
-                                    $textColor = 'text-emerald-700';
-                                    $profitText = '+$' . number_format($profit, 2);
-                                } elseif ($profit < 0) {
-                                    $bgColor = 'bg-red-100 hover:bg-red-200 border border-red-200';
-                                    $textColor = 'text-red-700';
-                                    $profitText = '-$' . number_format(abs($profit), 2);
-                                } else {
-                                    $bgColor = 'bg-slate-200';
-                                    $profitText = '$0.00';
-                                }
-                            }
-                        @endphp
-                        
-                        <div class="{{ $bgColor }} aspect-square rounded-lg flex flex-col items-center justify-center p-1 sm:p-2 transition-colors relative group cursor-pointer">
-                            <span class="text-xs sm:text-sm font-bold {{ $textColor }}">{{ $i }}</span>
-                            <span class="text-[8px] sm:text-[10px] font-medium {{ $textColor }} mt-1 truncate w-full text-center">
-                                {{ $profitText }}
-                            </span>
-                            
-                            {{-- Tooltip for exact value --}}
-                            @if(is_numeric($profit))
-                            <div class="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap z-10 pointer-events-none">
-                                {{ $startOfMonth->copy()->addDays($i - 1)->format('d M') }}: {{ $profit >= 0 ? '+' : '-' }}${{ number_format(abs($profit), 2) }}
-                                <svg class="absolute text-slate-800 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255" xml:space="preserve"><polygon class="fill-current" points="0,0 127.5,127.5 255,0"/></svg>
-                            </div>
-                            @endif
-                        </div>
-                    @endfor
-                </div>
-            </div>
-            
-            <div class="mt-6 flex items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 font-medium">
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200"></div> Profit
-                </div>
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-sm bg-red-100 border border-red-200"></div> Loss
-                </div>
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-sm bg-slate-100"></div> No Trades
-                </div>
-            </div>
-        </div>
-
-        {{-- PAIR STATS --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight">Statistik Pair (Win/Loss)</h3>
-                <form method="GET" action="{{ route('dashboard.reports') }}">
-                    <div class="relative">
-                        <select name="sort" onchange="this.form.submit()"
-                            class="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer">
-                            <option value="profit_desc" {{ $sort === 'profit_desc' ? 'selected' : '' }}>Tertinggi P/L</option>
-                            <option value="profit_asc" {{ $sort === 'profit_asc' ? 'selected' : '' }}>Terendah P/L</option>
-                            <option value="wins_desc" {{ $sort === 'wins_desc' ? 'selected' : '' }}>Terbanyak Win</option>
-                            <option value="losses_desc" {{ $sort === 'losses_desc' ? 'selected' : '' }}>Terbanyak Loss</option>
-                            <option value="winrate_desc" {{ $sort === 'winrate_desc' ? 'selected' : '' }}>Tertinggi Win Rate</option>
-                        </select>
-                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            
-            <div class="flex-1 overflow-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-slate-50/50 border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                            <th class="p-4 pl-6">Pair / Symbol</th>
-                            <th class="p-4 text-center">Wins</th>
-                            <th class="p-4 text-center">Losses</th>
-                            <th class="p-4 text-center">Win Rate</th>
-                            <th class="p-4 pr-6 text-right">Total P/L</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @forelse($pairStats as $stat)
-                            @php
-                                $totalTrades = $stat->wins + $stat->losses;
-                                $winRate = $totalTrades > 0 ? round(($stat->wins / $totalTrades) * 100) : 0;
-                            @endphp
-                            <tr class="hover:bg-slate-50/50 transition-colors">
-                                <td class="p-4 pl-6 font-bold text-slate-900">
-                                    {{ $stat->symbol }}
-                                </td>
-                                <td class="p-4 text-center font-medium text-emerald-600">
-                                    {{ $stat->wins }}
-                                </td>
-                                <td class="p-4 text-center font-medium text-red-600">
-                                    {{ $stat->losses }}
-                                </td>
-                                <td class="p-4 text-center">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <span class="text-xs font-bold text-slate-700 w-8">{{ $winRate }}%</span>
-                                        <div class="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                            <div class="h-full bg-brand-500 rounded-full" style="width: {{ $winRate }}%"></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="p-4 pr-6 text-right font-bold {{ $stat->total_profit >= 0 ? 'text-emerald-500' : 'text-red-500' }}">
-                                    {{ $stat->total_profit >= 0 ? '+' : '-' }}${{ number_format(abs($stat->total_profit), 2) }}
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="p-8 text-center text-slate-500">
-                                    <div class="flex flex-col items-center justify-center gap-3">
-                                        <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                                        <p>Belum ada data untuk ditampilkan.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
+    {{-- Empty State Info --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-10 text-center flex flex-col items-center justify-center">
+        <svg class="w-16 h-16 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        <h3 class="text-lg font-bold text-slate-800 mb-2">Semua fitur Analitik telah dipindahkan ke Dashboard</h3>
+        <p class="text-slate-500 max-w-sm text-sm">Untuk pengalaman yang lebih baik, laporan statistik Pair, grafik Win Rate, dan data P/L harian kini tergabung dalam satu ringkasan komprehensif di halaman utama (Dashboard).</p>
+        <a href="{{ route('dashboard') }}" class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-brand-500/30">
+            Ke Halaman Dashboard
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </a>
     </div>
-
-    {{-- TIME ANALYTICS --}}
-    <div class="mt-8">
-        <div class="flex items-center gap-3 mb-6">
-            <div class="w-9 h-9 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <div>
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight">⏰ Waktu Terbaik untuk Trading</h3>
-                <p class="text-xs text-slate-400">Berdasarkan waktu buka posisi — Zona WIB (UTC+8)</p>
-            </div>
-        </div>
-
-        {{-- Session Cards --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            @foreach ($sessions as $key => $session)
-                @php
-                    $sessWinRate = $session['trades'] > 0 ? round($session['wins'] / $session['trades'] * 100) : 0;
-                    $sessProfit  = round($session['profit'], 2);
-                    $profitColor = $sessProfit >= 0 ? 'text-emerald-600' : 'text-red-500';
-                    $profitSign  = $sessProfit >= 0 ? '+' : '';
-                    $barColor    = $sessWinRate >= 60 ? 'bg-emerald-400' : ($sessWinRate >= 40 ? 'bg-amber-400' : 'bg-red-400');
-                @endphp
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-                    <p class="text-sm font-bold text-slate-700 mb-3">{{ $session['label'] }}</p>
-                    <div class="flex items-end justify-between mb-2">
-                        <div>
-                            <p class="text-2xl font-bold text-slate-900">{{ $sessWinRate }}%</p>
-                            <p class="text-xs text-slate-400">Win Rate</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm font-bold {{ $profitColor }}">{{ $profitSign }}${{ number_format(abs($sessProfit), 2) }}</p>
-                            <p class="text-xs text-slate-400">{{ $session['trades'] }} trades</p>
-                        </div>
-                    </div>
-                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full {{ $barColor }} rounded-full transition-all" style="width: {{ $sessWinRate }}%"></div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-
-        {{-- Hourly Win Rate Chart --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h4 class="text-sm font-bold text-slate-700 mb-1">Win Rate & P/L per Jam (WIB)</h4>
-            <p class="text-xs text-slate-400 mb-4">Hover untuk melihat detail jumlah trade dan P/L tiap jam</p>
-            <div id="hourlyChart"></div>
-        </div>
-    </div>
-
-@push('scripts')
-<script>
-    const hourlyLabels  = @json($hourlyLabels);
-    const hourlyWinRate = @json($hourlyWinRate);
-    const hourlyProfit  = @json($hourlyProfit);
-    const hourlyTrades  = @json($hourlyTrades);
-
-    const options = {
-        series: [
-            { name: 'Win Rate (%)', type: 'bar', data: hourlyWinRate },
-            { name: 'P/L ($)',      type: 'line', data: hourlyProfit },
-        ],
-        chart: {
-            height: 280,
-            type: 'line',
-            toolbar: { show: false },
-            fontFamily: 'Inter, sans-serif',
-        },
-        colors: ['#6366f1', '#10b981'],
-        stroke: { width: [0, 3], curve: 'smooth' },
-        plotOptions: { bar: { borderRadius: 5, columnWidth: '60%' } },
-        fill: { opacity: [0.85, 1] },
-        xaxis: {
-            categories: hourlyLabels,
-            labels: { style: { fontSize: '10px', colors: '#94a3b8' } },
-            axisBorder: { show: false },
-            axisTicks: { show: false },
-        },
-        yaxis: [
-            { title: { text: 'Win Rate (%)', style: { fontSize: '11px', color: '#6366f1' } }, min: 0, max: 100, labels: { formatter: v => v + '%', style: { colors: '#6366f1' } } },
-            { opposite: true, title: { text: 'P/L ($)', style: { fontSize: '11px', color: '#10b981' } }, labels: { formatter: v => '$' + v.toFixed(2), style: { colors: '#10b981' } } },
-        ],
-        tooltip: {
-            shared: true,
-            custom: function({ series, seriesIndex, dataPointIndex, w }) {
-                const hour   = hourlyLabels[dataPointIndex];
-                const wr     = hourlyWinRate[dataPointIndex];
-                const pl     = hourlyProfit[dataPointIndex];
-                const trades = hourlyTrades[dataPointIndex];
-                const plSign = pl >= 0 ? '+' : '';
-                const plColor = pl >= 0 ? '#10b981' : '#ef4444';
-                return `<div style="padding:10px 14px;font-family:Inter,sans-serif;font-size:12px;background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
-                    <p style="font-weight:700;color:#1e293b;margin-bottom:6px">${hour} WIB</p>
-                    <p style="color:#6366f1">Win Rate: <b>${wr}%</b></p>
-                    <p style="color:${plColor}">P/L: <b>${plSign}$${Math.abs(pl).toFixed(2)}</b></p>
-                    <p style="color:#94a3b8">Trades: ${trades}</p>
-                </div>`;
-            }
-        },
-        grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
-        legend: { position: 'top', fontSize: '12px' },
-    };
-
-    new ApexCharts(document.getElementById('hourlyChart'), options).render();
-</script>
-@endpush
 
 @endsection

@@ -13,6 +13,7 @@ class DashboardController extends Controller
     {
         $filter = $request->query('filter', 'all');
         $dateFilter = $request->query('date_filter', 'all_time');
+        $sort = $request->query('sort', 'profit_desc');
 
         // Reusable date filter closure
         $applyDateFilter = function ($q) use ($dateFilter) {
@@ -188,6 +189,120 @@ class DashboardController extends Controller
         // Real balance from MT5
         $currentBalance = Auth::user()->balance;
 
+        // --- NEW ANALYTICS SECTION ---
+        
+        // 1. Calendar Heatmap
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        try {
+            $baseDate = \Carbon\Carbon::createFromDate($year, $month, 1);
+        } catch (\Exception $e) {
+            $baseDate = now();
+        }
+
+        $startOfMonth = $baseDate->copy()->startOfMonth();
+        $endOfMonth = $baseDate->copy()->endOfMonth();
+
+        $prevMonth = $baseDate->copy()->subMonth();
+        $nextMonth = $baseDate->copy()->addMonth();
+
+        $dailyTrades = TradingLog::where('user_id', Auth::id())
+            ->whereIn('type', ['buy_closed', 'sell_closed', 'other_closed'])
+            ->where(function ($query) use ($startOfMonth, $endOfMonth) {
+                $query->whereBetween('close_time', [$startOfMonth, $endOfMonth])
+                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
+                          $sub->whereNull('close_time')->whereBetween('open_time', [$startOfMonth, $endOfMonth]);
+                      })
+                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
+                          $sub->whereNull('close_time')->whereNull('open_time')->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
+                      });
+            })
+            ->selectRaw('DATE(COALESCE(close_time, open_time, created_at)) as date, SUM(profit_loss) as total_profit')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date')
+            ->map(function ($item) {
+                return $item->total_profit;
+            })->toArray();
+
+        // 2. Pair Stats (respects $dateFilter via $allTrades)
+        $pairStatsCollection = collect();
+        $groupedBySymbol = $allTrades->whereIn('type', ['buy_closed', 'sell_closed'])->groupBy('symbol');
+        foreach ($groupedBySymbol as $symbol => $tradesGrp) {
+            $wins = $tradesGrp->where('profit_loss', '>', 0)->count();
+            $losses = $tradesGrp->where('profit_loss', '<=', 0)->count();
+            $total_profit = $tradesGrp->sum('profit_loss');
+            $pairStatsCollection->push((object)[
+                'symbol' => $symbol,
+                'wins' => $wins,
+                'losses' => $losses,
+                'total_profit' => $total_profit,
+            ]);
+        }
+
+        switch ($sort) {
+            case 'wins_desc':
+                $pairStats = $pairStatsCollection->sortByDesc('wins')->values();
+                break;
+            case 'losses_desc':
+                $pairStats = $pairStatsCollection->sortByDesc('losses')->values();
+                break;
+            case 'profit_asc':
+                $pairStats = $pairStatsCollection->sortBy('total_profit')->values();
+                break;
+            case 'winrate_desc':
+                $pairStats = $pairStatsCollection->sortByDesc(function ($item) {
+                    $t = $item->wins + $item->losses;
+                    return $t > 0 ? $item->wins / $t : 0;
+                })->values();
+                break;
+            case 'profit_desc':
+            default:
+                $pairStats = $pairStatsCollection->sortByDesc('total_profit')->values();
+                break;
+        }
+
+        // 3. Time Analytics (respects $dateFilter via $allTrades)
+        $hourlyStats = [];
+        for ($h = 0; $h < 24; $h++) {
+            $hourlyStats[$h] = ['trades' => 0, 'wins' => 0, 'profit' => 0];
+        }
+        $sessions = [
+            'Asia'     => ['label' => '🌏 Asia',     'range' => [7, 15],  'trades' => 0, 'wins' => 0, 'profit' => 0],
+            'London'   => ['label' => '🇬🇧 London',   'range' => [15, 23], 'trades' => 0, 'wins' => 0, 'profit' => 0],
+            'NewYork'  => ['label' => '🇺🇸 New York', 'range' => [20, 4],  'trades' => 0, 'wins' => 0, 'profit' => 0],
+        ];
+
+        foreach ($allTrades->whereIn('type', ['buy_closed', 'sell_closed']) as $t) {
+            if (!$t->open_time) continue;
+            
+            $hour = \Carbon\Carbon::parse($t->open_time)->timezone('Asia/Jakarta')->hour;
+            $pl   = $t->profit_loss;
+
+            $hourlyStats[$hour]['trades']++;
+            $hourlyStats[$hour]['profit'] += $pl;
+            if ($pl > 0) $hourlyStats[$hour]['wins']++;
+
+            foreach ($sessions as $key => &$session) {
+                [$start, $end] = $session['range'];
+                $inSession = ($start < $end)
+                    ? ($hour >= $start && $hour < $end)
+                    : ($hour >= $start || $hour < $end);
+                if ($inSession) {
+                    $session['trades']++;
+                    $session['profit'] += $pl;
+                    if ($pl > 0) $session['wins']++;
+                }
+            }
+            unset($session);
+        }
+
+        $hourlyLabels  = array_map(fn($h) => str_pad($h, 2, '0', STR_PAD_LEFT) . ':00', range(0, 23));
+        $hourlyWinRate = array_map(fn($s) => $s['trades'] > 0 ? round($s['wins'] / $s['trades'] * 100, 1) : 0, $hourlyStats);
+        $hourlyProfit  = array_map(fn($s) => round($s['profit'], 2), $hourlyStats);
+        $hourlyTrades  = array_map(fn($s) => $s['trades'], $hourlyStats);
+
         return view('dashboard', compact(
             'totalTrades',
             'totalProfit',
@@ -205,7 +320,9 @@ class DashboardController extends Controller
             'totalCapital',
             'chartData',
             'filter',
-            'dateFilter'
+            'dateFilter',
+            'dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'prevMonth', 'nextMonth', 'sort',
+            'hourlyLabels', 'hourlyWinRate', 'hourlyProfit', 'hourlyTrades', 'sessions'
         ));
     }
 
@@ -298,130 +415,11 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        // 1. Daily Profit/Loss for requested month (default: current)
-        $month = $request->input('month', now()->month);
-        $year = $request->input('year', now()->year);
-
-        try {
-            $baseDate = \Carbon\Carbon::createFromDate($year, $month, 1);
-        } catch (\Exception $e) {
-            $baseDate = now();
-        }
-
-        $startOfMonth = $baseDate->copy()->startOfMonth();
-        $endOfMonth = $baseDate->copy()->endOfMonth();
-
-        $prevMonth = $baseDate->copy()->subMonth();
-        $nextMonth = $baseDate->copy()->addMonth();
-
-        $dailyTrades = TradingLog::where('user_id', $userId)
-            ->whereIn('type', ['buy_closed', 'sell_closed'])
-            ->where(function ($query) use ($startOfMonth, $endOfMonth) {
-                $query->whereBetween('close_time', [$startOfMonth, $endOfMonth])
-                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
-                          $sub->whereNull('close_time')->whereBetween('open_time', [$startOfMonth, $endOfMonth]);
-                      })
-                      ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
-                          $sub->whereNull('close_time')->whereNull('open_time')->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
-                      });
-            })
-            ->selectRaw('DATE(COALESCE(close_time, open_time, created_at)) as date, SUM(profit_loss) as total_profit')
-            ->groupBy('date')
-            ->get()
-            ->keyBy('date')
-            ->map(function ($item) {
-                return $item->total_profit;
-            })->toArray();
-
-        $pairStatsQuery = TradingLog::where('user_id', $userId)
-            ->whereIn('type', ['buy_closed', 'sell_closed'])
-            ->selectRaw('symbol, 
-                SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) as wins, 
-                SUM(CASE WHEN profit_loss <= 0 THEN 1 ELSE 0 END) as losses,
-                SUM(profit_loss) as total_profit')
-            ->groupBy('symbol');
-
-        // Apply sorting based on request
-        $sort = $request->input('sort', 'profit_desc'); // default sort
-        
-        switch ($sort) {
-            case 'wins_desc':
-                $pairStatsQuery->orderByDesc('wins');
-                break;
-            case 'losses_desc':
-                $pairStatsQuery->orderByDesc('losses');
-                break;
-            case 'profit_asc':
-                $pairStatsQuery->orderBy('total_profit', 'asc');
-                break;
-            case 'winrate_desc':
-                // (wins / (wins+losses)) sorting logic can't easily be done directly in eloquent 
-                // but we can sort by raw expression
-                $pairStatsQuery->orderByRaw('(SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) / COUNT(*)) DESC');
-                break;
-            case 'profit_desc':
-            default:
-                $pairStatsQuery->orderByDesc('total_profit');
-                break;
-        }
-
-        $pairStats = $pairStatsQuery->get();
-
-        // 3. Deposit & Withdrawal (All-Time)
+        // Only keeping All-Time Deposit and Withdrawal
         $totalDeposit = TradingLog::where('user_id', $userId)->where('type', 'deposit')->sum('profit_loss');
         $totalWithdrawal = TradingLog::where('user_id', $userId)->where('type', 'withdrawal')->sum('profit_loss');
 
-        // 4. Time Analytics — All closed trades in UTC+8
-        $closedTrades = TradingLog::where('user_id', $userId)
-            ->whereIn('type', ['buy_closed', 'sell_closed'])
-            ->whereNotNull('open_time')
-            ->get();
-
-        // --- Per-Hour stats (UTC+8) ---
-        $hourlyStats = [];
-        for ($h = 0; $h < 24; $h++) {
-            $hourlyStats[$h] = ['trades' => 0, 'wins' => 0, 'profit' => 0];
-        }
-        // --- Per-Session stats (UTC+8) ---
-        $sessions = [
-            'Asia'     => ['label' => '🌏 Asia',     'range' => [7, 15],  'trades' => 0, 'wins' => 0, 'profit' => 0],
-            'London'   => ['label' => '🇬🇧 London',   'range' => [15, 23], 'trades' => 0, 'wins' => 0, 'profit' => 0],
-            'NewYork'  => ['label' => '🇺🇸 New York', 'range' => [20, 4],  'trades' => 0, 'wins' => 0, 'profit' => 0],
-        ];
-
-        foreach ($closedTrades as $t) {
-            $hour = \Carbon\Carbon::parse($t->open_time)->timezone('Asia/Jakarta')->hour;
-            $pl   = $t->profit_loss;
-
-            // Hourly
-            $hourlyStats[$hour]['trades']++;
-            $hourlyStats[$hour]['profit'] += $pl;
-            if ($pl > 0) $hourlyStats[$hour]['wins']++;
-
-            // Sessions
-            foreach ($sessions as $key => &$session) {
-                [$start, $end] = $session['range'];
-                $inSession = ($start < $end)
-                    ? ($hour >= $start && $hour < $end)
-                    : ($hour >= $start || $hour < $end); // overnight (e.g. NY 20–04)
-                if ($inSession) {
-                    $session['trades']++;
-                    $session['profit'] += $pl;
-                    if ($pl > 0) $session['wins']++;
-                }
-            }
-            unset($session);
-        }
-
-        // Build hourly chart arrays for JS
-        $hourlyLabels  = array_map(fn($h) => str_pad($h, 2, '0', STR_PAD_LEFT) . ':00', range(0, 23));
-        $hourlyWinRate = array_map(fn($s) => $s['trades'] > 0 ? round($s['wins'] / $s['trades'] * 100, 1) : 0, $hourlyStats);
-        $hourlyProfit  = array_map(fn($s) => round($s['profit'], 2), $hourlyStats);
-        $hourlyTrades  = array_map(fn($s) => $s['trades'], $hourlyStats);
-
-        return view('reports', compact('dailyTrades', 'pairStats', 'startOfMonth', 'endOfMonth', 'prevMonth', 'nextMonth', 'sort',
-            'totalDeposit', 'totalWithdrawal',
-            'hourlyLabels', 'hourlyWinRate', 'hourlyProfit', 'hourlyTrades', 'sessions'));
+        return view('reports', compact('totalDeposit', 'totalWithdrawal'));
     }
 
     public function pendingOrders()
