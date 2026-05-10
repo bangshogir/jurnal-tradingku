@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                        AutoSnD_RiskPanel.mq5     |
 //|         Supply Demand + Fibo Auto Trading dengan Risk Panel      |
 //|                                    Copyright 2026, Antigravity   |
@@ -63,6 +63,11 @@ input double InpWickPercentage = 0.10;       // Max opposite wick ratio (10%)
 input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 input int    InpMomMaxCandlesAfterBase = 2;  // Maks jarak candle dari Base ke Momentum (untuk auto order)
+
+input group "=== Profit Protection (Step Trailing SL) ==="
+input bool   InpEnableProfitProtect = false; // Enable Step Profit Protection
+input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry (Breakeven) saat profit mencapai X% dari TP
+input double InpStep2Pct = 90.0;             // Step 2: Pindah SL ke 50% profit saat mencapai X% dari TP
 
 
 //=====================================================================
@@ -169,6 +174,53 @@ void CheckCutLoss()
      }
   }
 
+
+//---------------------------------------------------------------------
+// [3.1] PROFIT PROTECTION - Step-Based Trailing SL
+//---------------------------------------------------------------------
+void CheckProfitProtection()
+  {
+   if(!InpEnableProfitProtect) return;
+   int    digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   int    total  = PositionsTotal();
+   for(int i = total - 1; i >= 0; i--)
+     {
+      ulong  ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket)) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      double entry  = PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp     = PositionGetDouble(POSITION_TP);
+      double sl     = PositionGetDouble(POSITION_SL);
+      bool   isBuy  = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+      if(tp == 0) continue;
+      double tpDist = MathAbs(tp - entry);
+      if(tpDist <= 0) continue;
+      double curPrice = isBuy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double progress = isBuy ? (curPrice - entry) / tpDist * 100.0 : (entry - curPrice) / tpDist * 100.0;
+      if(progress <= 0) continue;
+      double newSL = sl;
+      if(progress >= InpStep2Pct)
+        {
+         double targetSL = isBuy ? NormalizeDouble(entry + tpDist * 0.5, digits) : NormalizeDouble(entry - tpDist * 0.5, digits);
+         if(isBuy  && targetSL > newSL) newSL = targetSL;
+         if(!isBuy && (newSL == 0 || targetSL < newSL)) newSL = targetSL;
+        }
+      else if(progress >= InpStep1Pct)
+        {
+         double targetSL = NormalizeDouble(entry, digits);
+         if(isBuy  && targetSL > newSL) newSL = targetSL;
+         if(!isBuy && (newSL == 0 || targetSL < newSL)) newSL = targetSL;
+        }
+      if(MathAbs(newSL - sl) > SymbolInfoDouble(_Symbol, SYMBOL_POINT) * 0.5)
+        {
+         string stage = (progress >= InpStep2Pct) ? "Step2(50%Profit)" : "Step1(Breakeven)";
+         if(ExtTrade.PositionModify(ticket, newSL, tp))
+            Print("ProfitProtect [", stage, "] Ticket:", ticket, " NewSL:", DoubleToString(newSL, digits), " Progress:", DoubleToString(progress, 1), "%");
+         else
+            Print("ProfitProtect: Gagal modify SL ticket:", ticket, " Error:", GetLastError());
+        }
+     }
+  }
 void CheckAutoCloseFriday()
   {
    if(!InpEnableAutoCloseFriday) return;
@@ -1209,6 +1261,7 @@ void OnTick()
    if(!g_resync_done) { ResyncHistory(); g_resync_done = true; }
    ExtPanel.UpdateStats();
    CheckCutLoss();
+   CheckProfitProtection();
    CheckAutoCloseFriday();
    
    // Selalu update label text agar dinamis terus berada di TENGAH kotak
@@ -1287,3 +1340,5 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
 void OnChartEvent(const int id, const long &lp, const double &dp, const string &sp)
   { ExtPanel.ChartEvent(id, lp, dp, sp); }
 //+------------------------------------------------------------------+
+
+
