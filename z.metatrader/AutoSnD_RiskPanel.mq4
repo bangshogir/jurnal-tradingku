@@ -852,3 +852,67 @@ void ProcessBar(int shift){
 
 
 
+
+
+int OnInit(){
+   ChartSetInteger(0,CHART_FOREGROUND,false);
+   if(!ExtPanel.Create(0,"AutoSnD - Risk Panel",0,20,30,305,520)) return INIT_FAILED;
+   ExtPanel.Run();
+   ScanHistory();
+   ScanHistoricalMomentum();
+   g_last_processed_bar=iTime(Symbol(),Period(),0);
+   Print("AutoSnD EA MT4 v3.00 Ready. Trading:",(InpEnableAutoSnD?"ON":"OFF"));
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason){
+   DeleteAllSnDObjects();
+   for(int i=ObjectsTotal()-1;i>=0;i--){
+      string n=ObjectName(i);
+      if(StringFind(n,"MomUp_")==0||StringFind(n,"MomDn_")==0) ObjectDelete(n);
+   }
+   ExtPanel.Destroy(reason);
+}
+
+void OnTick(){
+   if(!g_resync_done){InitialHistorySync();g_resync_done=true;}
+   PollTradeEvents();
+   ExtPanel.UpdateStats();
+   CheckCutLoss();
+   CheckAutoCloseFriday();
+   UpdateZoneLabelsTime(TimeCurrent());
+   datetime currentBarTime=iTime(Symbol(),Period(),0);
+   ExtPanel.UpdateClock(currentBarTime);
+   if(currentBarTime!=g_last_processed_bar){
+      ProcessBar(1);
+      bool isBullMom=IsBullishMomentum(1);
+      bool isBearMom=IsBearishMomentum(1);
+      if(isBullMom)     {DrawMomentumArrow(true, 1);ExecuteMomentumAutoTrade(true, 1);}
+      else if(isBearMom){DrawMomentumArrow(false,1);ExecuteMomentumAutoTrade(false,1);}
+      g_last_processed_bar=currentBarTime;
+   }
+   // Early Signal (N detik sebelum close candle)
+   if(InpEarlySignalSeconds>0){
+      int sec_left=(int)(currentBarTime+Period()*60-TimeCurrent());
+      if(sec_left>0&&sec_left<=InpEarlySignalSeconds){
+         if(IsBullishMomentum(0)) DrawMomentumArrow(true,0);
+         else if(IsBearishMomentum(0)) DrawMomentumArrow(false,0);
+         else{
+            ObjectDelete("MomUp_"+TimeToString(currentBarTime));
+            ObjectDelete("MomDn_"+TimeToString(currentBarTime));
+         }
+      }
+   }
+}
+
+void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
+   {ExtPanel.ChartEvent(id,lp,dp,sp);}
+//+------------------------------------------------------------------+
+
+
+
+
+
+
+
+
