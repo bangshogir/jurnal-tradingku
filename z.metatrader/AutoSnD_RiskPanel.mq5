@@ -921,7 +921,7 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL = 0)
    string comm   = "MOM_AUTO[" + GetTFString() + "]";
    if(ExtPanel.m_cl_active)
      {
-      comm   = "RP_CL_" + DoubleToString(stopLoss, digits) + "[" + GetTFString() + "]";
+      comm   = "MOM_AUTO|RP_CL_" + DoubleToString(stopLoss, digits) + "[" + GetTFString() + "]";
       hardSL = isBullish
              ? NormalizeDouble(entry - diff * 2.0, digits)
              : NormalizeDouble(entry + diff * 2.0, digits);
