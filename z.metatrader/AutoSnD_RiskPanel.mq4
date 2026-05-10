@@ -873,23 +873,6 @@ void DeleteAllSnDObjects(){
    }
 }
 
-void InitialHistorySync(){
-   ArrayResize(g_active_tickets,0);
-   for(int i=0;i<OrdersTotal();i++){
-      if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
-      int sz=ArraySize(g_active_tickets); ArrayResize(g_active_tickets,sz+1);
-      g_active_tickets[sz]=OrderTicket();
-      int ot=OrderType();
-      if(ot<=OP_SELL) SendTradeDataToWebhook(OrderTicket(),"deal_open");
-      else SendTradeDataToWebhook(OrderTicket(),"pending_order");
-   }
-   int histTotal=OrdersHistoryTotal();
-   for(int i=0;i<histTotal;i++){
-      if(OrderSelect(i,SELECT_BY_POS,MODE_HISTORY)&&OrderType()==6)
-         SendTradeDataToWebhook(OrderTicket(),"balance");
-   }
-   g_last_history_total=OrdersHistoryTotal();
-}
 
 string GetTFString(){
    int p=Period();
