@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                        AutoSnD_RiskPanel.mq4     |
 //|         Supply Demand + Fibo Auto Trading dengan Risk Panel      |
 //|                                    Copyright 2026, Antigravity   |
@@ -157,6 +157,120 @@ double CalcLotSize(double risk,double entry,double sl,string symbol){
 //=====================================================================
 // [3] CUT LOSS & FRIDAY MONITOR
 //=====================================================================
+
+bool IsMomentumAfterBase(bool isBullish, int shift, double &out_sl_level) {
+   datetime candle_time = iTime(Symbol(), Period(), shift);
+   double   pt          = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
+   
+   for(int i = 0; i < g_zone_count; i++) {
+      if(!g_zones[i].active)                    continue;
+      if(g_zones[i].type != ZONE_RBR_DBD)       continue;
+      if(isBullish  && !g_zones[i].is_demand)   continue;
+      if(!isBullish &&  g_zones[i].is_demand)   continue;
+      if(g_zones[i].end_time >= candle_time)    continue;
+      
+      int end_bar    = iBarShift(Symbol(), Period(), g_zones[i].end_time);
+      int distance   = end_bar - shift;
+      
+      if(distance >= 1 && distance <= InpMomMaxCandlesAfterBase) {
+         out_sl_level = isBullish 
+                      ? (g_zones[i].btm - InpBufferPoints * pt)
+                      : (g_zones[i].top + InpBufferPoints * pt);
+         return true;
+      }
+   }
+   return false;
+}
+
+void CheckProfitProtection() {
+   if(!InpEnableProfitProtect) return;
+   int digits = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
+   for(int i = OrdersTotal() - 1; i >= 0; i--) {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      if(OrderSymbol() != Symbol() || OrderType() > OP_SELL) continue;
+      
+      ulong  ticket = OrderTicket();
+      double entry  = OrderOpenPrice();
+      double tp     = OrderTakeProfit();
+      double sl     = OrderStopLoss();
+      bool   isBuy  = (OrderType() == OP_BUY);
+      
+      if(tp == 0) continue;
+      double tpDist = MathAbs(tp - entry);
+      if(tpDist <= 0) continue;
+      
+      double curPrice = isBuy ? Bid : Ask;
+      double progress = isBuy ? (curPrice - entry) / tpDist * 100.0 : (entry - curPrice) / tpDist * 100.0;
+      if(progress <= 0) continue;
+      
+      double newSL = sl;
+      if(progress >= InpStep2Pct) {
+         double targetSL = isBuy ? NormalizeDouble(entry + tpDist * 0.5, digits) : NormalizeDouble(entry - tpDist * 0.5, digits);
+         if(isBuy  && targetSL > newSL) newSL = targetSL;
+         if(!isBuy && (newSL == 0 || targetSL < newSL)) newSL = targetSL;
+      } else if(progress >= InpStep1Pct) {
+         double targetSL = NormalizeDouble(entry, digits);
+         if(isBuy  && targetSL > newSL) newSL = targetSL;
+         if(!isBuy && (newSL == 0 || targetSL < newSL)) newSL = targetSL;
+      }
+      
+      if(MathAbs(newSL - sl) > SymbolInfoDouble(Symbol(), SYMBOL_POINT) * 0.5) {
+         string stage = (progress >= InpStep2Pct) ? "Step2(50%Profit)" : "Step1(Breakeven)";
+         if(OrderModify(ticket, entry, newSL, tp, 0, clrNONE))
+            Print("ProfitProtect [", stage, "] Ticket:", ticket, " NewSL:", DoubleToString(newSL, digits), " Progress:", DoubleToString(progress, 1), "%");
+         else
+            Print("ProfitProtect: Gagal modify SL ticket:", ticket, " Error:", GetLastError());
+      }
+   }
+}
+
+void CheckContinuationZone(int shift) {
+   bool is_bull_rally = IsBullishMomentum(shift);
+   bool is_bear_drop  = IsBearishMomentum(shift);
+   if(!is_bull_rally && !is_bear_drop) return;
+   
+   double leg_out_range = iHigh(Symbol(), Period(), shift) - iLow(Symbol(), Period(), shift);
+   int best_base_start = -1;
+   int best_base_end = -1;
+   
+   for(int k=1; k<=InpBaseMaxCandles; k++) {
+      int idx_leg_in = shift + k + 1;
+      bool leg_in_valid = is_bull_rally ? (iClose(Symbol(),Period(),idx_leg_in) > iOpen(Symbol(),Period(),idx_leg_in))
+                                        : (iClose(Symbol(),Period(),idx_leg_in) < iOpen(Symbol(),Period(),idx_leg_in));
+      if(!leg_in_valid) continue;
+      
+      bool valid_base = true;
+      double max_h = 0, min_l = 999999;
+      for(int b=1; b<=k; b++) {
+         int b_idx = shift + b;
+         double h = iHigh(Symbol(), Period(), b_idx);
+         double l = iLow(Symbol(), Period(), b_idx);
+         if(h > max_h) max_h = h;
+         if(l < min_l) min_l = l;
+         double rng = h - l;
+         if(rng > leg_out_range * 0.6) { valid_base = false; break; }
+      }
+      if(valid_base && (max_h - min_l) < leg_out_range * 1.5) {
+         best_base_start = shift + k;
+         best_base_end = shift + 1;
+         break;
+      }
+   }
+   
+   if(best_base_end != -1) {
+      double top = 0, btm = 999999;
+      for(int i=best_base_end; i<=best_base_start; i++) {
+         if(iHigh(Symbol(), Period(), i) > top) top = iHigh(Symbol(), Period(), i);
+         if(iLow(Symbol(), Period(), i) < btm) btm = iLow(Symbol(), Period(), i);
+      }
+      datetime st = iTime(Symbol(), Period(), best_base_start);
+      for(int z=0; z<g_zone_count; z++) {
+         if(g_zones[z].start_time == st && g_zones[z].type == ZONE_RBR_DBD) return;
+      }
+      datetime et = iTime(Symbol(), Period(), best_base_end);
+      DrawZone(is_bull_rally, top, btm, st, ZONE_RBR_DBD, et);
+   }
+}
 void CheckCutLoss(){
    double bid=MarketInfo(Symbol(),MODE_BID);
    double ask=MarketInfo(Symbol(),MODE_ASK);
@@ -845,3 +959,11 @@ void OnTick(){
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
    {ExtPanel.ChartEvent(id,lp,dp,sp);}
 //+------------------------------------------------------------------+
+
+
+
+
+
+
+
+
