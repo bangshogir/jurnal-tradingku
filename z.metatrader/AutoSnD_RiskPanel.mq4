@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                        AutoSnD_RiskPanel.mq4     |
 //|         Supply Demand + Fibo Auto Trading dengan Risk Panel      |
 //|                                    Copyright 2026, Antigravity   |
@@ -136,10 +136,7 @@ datetime g_last_ph_time=0, g_last_pl_time=0;
 double   g_old_last_ph=0, g_old_last_pl=0;
 datetime g_marked_ph_time=0, g_marked_pl_time=0;
 datetime g_last_processed_bar=0;
-double   g_fibo_origin_bullish=0, g_fibo_origin_bearish=0;
-datetime g_fibo_origin_bull_time=0, g_fibo_origin_bear_time=0;
-bool     g_fibo_bull_pending=false, g_fibo_bear_pending=false;
-int      g_pending_bull_zone_idx=-1, g_pending_bear_zone_idx=-1;
+
 bool     g_is_scanning_history=false;
 datetime g_traded_zones[];
 int      g_active_tickets[];
@@ -170,6 +167,86 @@ double CalcLotSize(double risk,double entry,double sl,string symbol){
 //=====================================================================
 // [3] CUT LOSS & FRIDAY MONITOR
 //=====================================================================
+
+
+bool IsBullishMomentum(int index = 1) {
+   double atr = iATR(Symbol(), Period(), InpATRPeriod, index);
+   if(atr <= 0) return false;
+   
+   double high = iHigh(Symbol(), Period(), index);
+   double low  = iLow(Symbol(), Period(), index);
+   double open = iOpen(Symbol(), Period(), index);
+   double close= iClose(Symbol(), Period(), index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   if(totalLength <= atr * InpATRMultiplier) return false;
+   
+   if(close <= open) return false;
+   double bodyLength = close - open;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   double lowerWick = open - low;
+   if(lowerWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+bool IsBearishMomentum(int index = 1) {
+   double atr = iATR(Symbol(), Period(), InpATRPeriod, index);
+   if(atr <= 0) return false;
+   
+   double high = iHigh(Symbol(), Period(), index);
+   double low  = iLow(Symbol(), Period(), index);
+   double open = iOpen(Symbol(), Period(), index);
+   double close= iClose(Symbol(), Period(), index);
+   
+   double totalLength = high - low;
+   if(totalLength <= 0) return false;
+   if(totalLength <= atr * InpATRMultiplier) return false;
+   
+   if(open <= close) return false;
+   double bodyLength = open - close;
+   if(bodyLength < totalLength * InpBodyPercentage) return false;
+   
+   double upperWick = high - open;
+   if(upperWick > totalLength * InpWickPercentage) return false;
+   
+   return true;
+}
+
+void DrawMomentumArrow(bool isBullish, int index) {
+   datetime t = iTime(Symbol(), Period(), index);
+   double high = iHigh(Symbol(), Period(), index);
+   double low  = iLow(Symbol(), Period(), index);
+   double range = high - low;
+   string objName = (isBullish ? "MomUp_" : "MomDn_") + TimeToString(t);
+   
+   double price = isBullish ? (low - (range * 0.2)) : (high + (range * 0.2));
+   
+   if(ObjectFind(0, objName) >= 0) {
+      ObjectMove(0, objName, 0, t, price);
+      return;
+   }
+   
+   if(isBullish) {
+      ObjectCreate(0, objName, OBJ_ARROW_UP, 0, t, price);
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrLime);
+   } else {
+      ObjectCreate(0, objName, OBJ_ARROW_DOWN, 0, t, price);
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clrRed);
+   }
+   ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+}
+
+void ScanHistoricalMomentum() {
+   int total = iBars(Symbol(), Period());
+   int start = MathMin(InpHistoryBars, total - 2);
+   for(int i = start; i >= 1; i--) {
+      if(IsBullishMomentum(i)) DrawMomentumArrow(true, i);
+      else if(IsBearishMomentum(i)) DrawMomentumArrow(false, i);
+   }
+}
 
 bool IsMomentumAfterBase(bool isBullish, int shift, double &out_sl_level) {
    datetime candle_time = iTime(Symbol(), Period(), shift);
@@ -733,44 +810,6 @@ void ExecuteAutoTrade(bool isDemand,double zoneTop,double zoneBtm,datetime zoneT
    if(result){MarkZoneTraded(zoneTime);Print("AutoSnD Executed: ",(isDemand?"BuyLimit":"SellLimit")," Entry:",entryPrice," SL:",stopLoss," TP:",tpPrice);}
 }
 
-bool CheckFiboAndTrade(double fibo_low,double fibo_high,datetime from_time,int zone_idx){
-   if(zone_idx<0||zone_idx>=g_zone_count) return false;
-   if(!g_zones[zone_idx].active) return false;
-   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
-   double dist=fibo_high-fibo_low;
-   double f_upper=fibo_high-dist*0.382;
-   double f_lower=fibo_high-dist*0.618;
-   bool overlaps=(g_zones[zone_idx].top>=f_lower)&&(g_zones[zone_idx].btm<=f_upper);
-   if(!overlaps) return false;
-   // Golden zone: highlight the zone
-   ObjectSetInteger(0,g_zones[zone_idx].rect_name,OBJPROP_COLOR,InpGoldenZoneColor);
-   ExecuteAutoTrade(g_zones[zone_idx].is_demand,g_zones[zone_idx].top,g_zones[zone_idx].btm,g_zones[zone_idx].start_time);
-   return true;
-}
-
-bool CheckFVGAndTrade(int shift,int zone_idx){
-   if(!InpFilterFVG) return false;
-   if(zone_idx<0||zone_idx>=g_zone_count) return false;
-   if(!g_zones[zone_idx].active) return false;
-   if(IsZoneTraded(g_zones[zone_idx].start_time)) return false;
-   bool isDemand=g_zones[zone_idx].is_demand;
-   bool hasFVG=false;
-   if(isDemand){
-      double fvg_top=iLow(Symbol(),Period(),shift);
-      double fvg_btm=iHigh(Symbol(),Period(),shift+2);
-      if(fvg_top>fvg_btm) hasFVG=true;
-   }else{
-      double fvg_top=iLow(Symbol(),Period(),shift+2);
-      double fvg_btm=iHigh(Symbol(),Period(),shift);
-      if(fvg_top>fvg_btm) hasFVG=true;
-   }
-   if(hasFVG){
-      ObjectSetInteger(0,g_zones[zone_idx].rect_name,OBJPROP_COLOR,InpFVGColor);
-      ExecuteAutoTrade(g_zones[zone_idx].is_demand,g_zones[zone_idx].top,g_zones[zone_idx].btm,g_zones[zone_idx].start_time);
-      return true;
-   }
-   return false;
-}
 
 void ProcessBar(int shift){
    g_old_last_ph=g_last_ph; g_old_last_pl=g_last_pl;
@@ -778,11 +817,9 @@ void ProcessBar(int shift){
    if(ph>0){datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);g_last_ph=ph;g_last_ph_time=t;}
    double pl=GetPivotLow(InpPivotLB,shift);
    if(pl>0){datetime t=iTime(Symbol(),Period(),shift+InpPivotLB);g_last_pl=pl;g_last_pl_time=t;}
-   bool bull_fvg=iLow(Symbol(),Period(),shift)>iHigh(Symbol(),Period(),shift+2);
-   bool bear_fvg=iHigh(Symbol(),Period(),shift)<iLow(Symbol(),Period(),shift+2);
    double cls=iClose(Symbol(),Period(),shift);
-   bool bull_bos=bull_fvg&&g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
-   bool bear_bos=bear_fvg&&g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
+   bool bull_bos=g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
+   bool bear_bos=g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
    if(bull_bos){
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
@@ -790,9 +827,6 @@ void ProcessBar(int shift){
       int base=FindDemandBase(shift);
       if(base!=-1){
          DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
-         g_pending_bull_zone_idx=g_zone_count-1;
-         CheckFVGAndTrade(shift,g_pending_bull_zone_idx);
-         
       }
    }
    if(bear_bos){
@@ -802,11 +836,11 @@ void ProcessBar(int shift){
       int base=FindSupplyBase(shift);
       if(base!=-1){
          DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
-         g_pending_bear_zone_idx=g_zone_count-1;
-         CheckFVGAndTrade(shift,g_pending_bear_zone_idx);
-         
       }
    }
+   CheckContinuationZone(shift);
+   CheckMitigation(shift);
+}
 
 
 
