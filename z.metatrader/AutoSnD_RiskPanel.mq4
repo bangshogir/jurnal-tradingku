@@ -854,6 +854,113 @@ void ProcessBar(int shift){
 
 
 
+
+//=====================================================================
+// [7] SCAN & UTILITY FUNCTIONS
+//=====================================================================
+void ScanHistory(){
+   g_is_scanning_history=true;
+   int total=iBars(Symbol(),Period());
+   int start=MathMin(InpHistoryBars+InpPivotLB*2+InpOriginLookback,total-2);
+   for(int i=start;i>=1;i--) ProcessBar(i);
+   g_is_scanning_history=false;
+}
+
+void DeleteAllSnDObjects(){
+   for(int i=ObjectsTotal()-1;i>=0;i--){
+      string n=ObjectName(i);
+      if(StringFind(n,"SnD_")==0) ObjectDelete(n);
+   }
+}
+
+void InitialHistorySync(){
+   ArrayResize(g_active_tickets,0);
+   for(int i=0;i<OrdersTotal();i++){
+      if(!OrderSelect(i,SELECT_BY_POS,MODE_TRADES)) continue;
+      int sz=ArraySize(g_active_tickets); ArrayResize(g_active_tickets,sz+1);
+      g_active_tickets[sz]=OrderTicket();
+      int ot=OrderType();
+      if(ot<=OP_SELL) SendTradeDataToWebhook(OrderTicket(),"deal_open");
+      else SendTradeDataToWebhook(OrderTicket(),"pending_order");
+   }
+   int histTotal=OrdersHistoryTotal();
+   for(int i=0;i<histTotal;i++){
+      if(OrderSelect(i,SELECT_BY_POS,MODE_HISTORY)&&OrderType()==6)
+         SendTradeDataToWebhook(OrderTicket(),"balance");
+   }
+   g_last_history_total=OrdersHistoryTotal();
+}
+
+string GetTFString(){
+   int p=Period();
+   if(p==1)    return "M1";
+   if(p==5)    return "M5";
+   if(p==15)   return "M15";
+   if(p==30)   return "M30";
+   if(p==60)   return "H1";
+   if(p==240)  return "H4";
+   if(p==1440) return "D1";
+   if(p==10080)return "W1";
+   return "MN";
+}
+
+void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL=0){
+   if(!InpEnableAutoMomentum) return;
+   int    digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
+   double pt    =SymbolInfoDouble(Symbol(),SYMBOL_POINT);
+   double high  =iHigh(Symbol(),Period(),shift);
+   double low   =iLow (Symbol(),Period(),shift);
+
+   double stopLoss;
+   if(customSL>0)
+      stopLoss=customSL;
+   else
+      stopLoss=isBullish
+               ? NormalizeDouble(low  - InpBufferPoints*pt, digits)
+               : NormalizeDouble(high + InpBufferPoints*pt, digits);
+
+   double ask  =MarketInfo(Symbol(),MODE_ASK);
+   double bid  =MarketInfo(Symbol(),MODE_BID);
+   double entry=isBullish ? ask : bid;
+
+   if(isBullish  && stopLoss>=entry){Print("AutoMomentum: SL BUY tdk valid:",stopLoss," >= entry:",entry); return;}
+   if(!isBullish && stopLoss<=entry){Print("AutoMomentum: SL SELL tdk valid:",stopLoss," <= entry:",entry); return;}
+
+   double riskAmount=ExtPanel.AdjRisk();
+   if(riskAmount<=0){Print("AutoMomentum: Risk <= 0, cek panel."); return;}
+
+   double lot=CalcLotSize(riskAmount,entry,stopLoss,Symbol());
+   if(lot<=0){
+      string msg="AutoMomentum: Lot tidak valid ("+DoubleToString(lot,2)+"). Cek Risk Panel atau jarak SL.";
+      Print(msg); return;
+   }
+
+   double mult=InpMomentumRR>0 ? InpMomentumRR : StringToDouble(ExtPanel.m_edt_ratio.Text());
+   if(mult<=0) mult=2.0;
+   double diff=MathAbs(entry-stopLoss);
+   double tp  =isBullish
+               ? NormalizeDouble(entry+diff*mult,digits)
+               : NormalizeDouble(entry-diff*mult,digits);
+
+   double hardSL=stopLoss;
+   string tfstr=GetTFString();
+   string comm ="MOM_AUTO["+tfstr+"]";
+   if(ExtPanel.m_cl_active){
+      comm  ="MOM_AUTO|RP_CL_"+DoubleToString(stopLoss,digits)+"["+tfstr+"]";
+      hardSL=isBullish
+             ? NormalizeDouble(entry-diff*2.0,digits)
+             : NormalizeDouble(entry+diff*2.0,digits);
+   }
+
+   bool result=isBullish
+               ? ExtTrade.Buy (lot,Symbol(),entry,hardSL,tp,0,0,comm)
+               : ExtTrade.Sell(lot,Symbol(),entry,hardSL,tp,0,0,comm);
+
+   if(result) Print("MomentumAutoTrade: ",(isBullish?"BUY":"SELL")," Entry:",entry," SL:",hardSL," TP:",tp);
+}
+
+bool g_resync_done=false;
+
 int OnInit(){
    ChartSetInteger(0,CHART_FOREGROUND,false);
    if(!ExtPanel.Create(0,"AutoSnD - Risk Panel",0,20,30,305,520)) return INIT_FAILED;
@@ -887,8 +994,16 @@ void OnTick(){
       ProcessBar(1);
       bool isBullMom=IsBullishMomentum(1);
       bool isBearMom=IsBearishMomentum(1);
-      if(isBullMom)     {DrawMomentumArrow(true, 1);ExecuteMomentumAutoTrade(true, 1);}
-      else if(isBearMom){DrawMomentumArrow(false,1);ExecuteMomentumAutoTrade(false,1);}
+       if(isBullMom){
+         DrawMomentumArrow(true,1);
+         double sl_zone=0;
+         if(IsMomentumAfterBase(true,1,sl_zone)) ExecuteMomentumAutoTrade(true,1,sl_zone);
+      }
+      else if(isBearMom){
+         DrawMomentumArrow(false,1);
+         double sl_zone=0;
+         if(IsMomentumAfterBase(false,1,sl_zone)) ExecuteMomentumAutoTrade(false,1,sl_zone);
+      }
       g_last_processed_bar=currentBarTime;
    }
    // Early Signal (N detik sebelum close candle)
