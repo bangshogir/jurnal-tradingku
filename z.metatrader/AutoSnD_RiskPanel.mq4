@@ -89,31 +89,44 @@ input color   InpSupplyColor     = C'190,0,0';
 input bool    InpShowMitigated   = true;
 input color   InpMitColor        = clrGray;         // Warna Border Zona Termitigasi
 input bool    InpShowZones       = true;            // Tampilkan Zona SnD Aktif
+input bool    InpShowRbdDbr      = true;          // Tampilkan Zona Reversal (RBD/DBR)
+input bool    InpShowRbrDbd      = true;          // Tampilkan Zona Continuation (RBR/DBD)
+input bool    InpAutoTradeRbrDbd = false;         // Auto-Trade Zona Continuation
+input color   InpContColor       = clrLightBlue;  // Warna Border Zona Continuation
+input int     InpBaseMaxCandles  = 3;             // Max Base Candles utk Continuation
 input color   InpBOSBull         = clrDodgerBlue;   // Warna Bullish BOS
 input color   InpBOSBear         = clrOrangeRed;    // Warna Bearish BOS
 input color   InpGoldenZoneColor = clrGold;
 
-input string  _s4_="=== Imbalance & FVG Filter ===";
-input bool    InpFilterFVG       = true;
-input color   InpFVGColor        = C'180,0,180'; // Magenta
+
 
 input string  _s5_="=== Momentum Indicator ===";
 input int     InpEarlySignalSeconds = 10;
 input bool    InpEnableAutoMomentum = false;
+input double  InpMomentumRR         = 0.61;
 input double  InpBodyPercentage     = 0.75;
 input double  InpWickPercentage     = 0.10;
 input int     InpATRPeriod          = 14;
 input double  InpATRMultiplier      = 1.5;
+input int     InpMomMaxCandlesAfterBase = 2;
+
+input string  _s6_="=== Profit Protection (Step Trailing SL) ===";
+input bool    InpEnableProfitProtect = false; // Enable Step Profit Protection
+input double  InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry (Breakeven) saat profit mencapai X% dari TP
+input double  InpStep2Pct = 90.0;             // Step 2: Pindah SL ke 50% profit saat mencapai X% dari TP
 
 //=====================================================================
 // ZONE STRUCT & GLOBALS
 //=====================================================================
+enum ENUM_ZONE_TYPE { ZONE_RBD_DBR, ZONE_RBR_DBD };
+
 struct ZoneData {
    string   rect_name, lbl_name, lbl_top, lbl_btm;
    bool     is_demand;
    double   top, btm;
-   datetime start_time;
+   datetime start_time, end_time;
    bool     active;
+   ENUM_ZONE_TYPE type;
 };
 #define MAX_ZONES 300
 ZoneData g_zones[MAX_ZONES];
@@ -189,7 +202,7 @@ void CheckProfitProtection() {
       if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
       if(OrderSymbol() != Symbol() || OrderType() > OP_SELL) continue;
       
-      ulong  ticket = OrderTicket();
+      int    ticket = OrderTicket();
       double entry  = OrderOpenPrice();
       double tp     = OrderTakeProfit();
       double sl     = OrderStopLoss();
@@ -624,9 +637,10 @@ void PollTradeEvents(){
 //=====================================================================
 // [6] AUTO SND TRADING ENGINE
 //=====================================================================
-void DrawZone(bool is_demand,double top,double btm,datetime start_time){
+void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_ZONE_TYPE ztype = ZONE_RBD_DBR, datetime end_time = 0){
    if(g_zone_count>=MAX_ZONES) return;
-   color col_use=is_demand?InpDemandColor:InpSupplyColor;
+   if(end_time == 0) end_time = start_time;
+   color col_use=(ztype == ZONE_RBR_DBD) ? InpContColor : (is_demand?InpDemandColor:InpSupplyColor);
    string uid=NextID(),rname="SnD_Z_"+uid,lname="SnD_ZL_"+uid;
    if(InpShowZones)
      {
@@ -640,8 +654,10 @@ void DrawZone(bool is_demand,double top,double btm,datetime start_time){
      }
    g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top="SnD_PT_"+uid; g_zones[g_zone_count].lbl_btm="SnD_PB_"+uid;
    g_zones[g_zone_count].is_demand=is_demand;g_zones[g_zone_count].top=top;g_zones[g_zone_count].btm=btm;g_zones[g_zone_count].start_time=start_time;
+   g_zones[g_zone_count].end_time=end_time; g_zones[g_zone_count].type=ztype;
    g_zones[g_zone_count].active=true; g_zone_count++;
 }
+
 
 void DrawBOS(bool is_bull,double price,datetime x1,datetime x2){
    if(!InpShowBOS) return;
@@ -770,195 +786,30 @@ void ProcessBar(int shift){
    if(bull_bos){
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
-      g_fibo_bull_pending=false; g_pending_bull_zone_idx=-1;
+      
       int base=FindDemandBase(shift);
       if(base!=-1){
          DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
          g_pending_bull_zone_idx=g_zone_count-1;
          CheckFVGAndTrade(shift,g_pending_bull_zone_idx);
-         g_fibo_origin_bullish=g_last_pl;g_fibo_origin_bull_time=g_last_pl_time;g_fibo_bull_pending=true;
+         
       }
    }
    if(bear_bos){
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(Symbol(),Period(),shift));
-      g_fibo_bear_pending=false; g_pending_bear_zone_idx=-1;
+      
       int base=FindSupplyBase(shift);
       if(base!=-1){
          DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
          g_pending_bear_zone_idx=g_zone_count-1;
          CheckFVGAndTrade(shift,g_pending_bear_zone_idx);
-         g_fibo_origin_bearish=g_last_ph;g_fibo_origin_bear_time=g_last_ph_time;g_fibo_bear_pending=true;
+         
       }
    }
-   if(g_fibo_bull_pending&&ph>0&&g_last_ph_time>g_fibo_origin_bull_time)
-      if(CheckFiboAndTrade(g_fibo_origin_bullish,g_last_ph,g_fibo_origin_bull_time,g_pending_bull_zone_idx))
-         {g_fibo_bull_pending=false;g_pending_bull_zone_idx=-1;}
-   if(g_fibo_bear_pending&&pl>0&&g_last_pl_time>g_fibo_origin_bear_time)
-      if(CheckFiboAndTrade(g_last_pl,g_fibo_origin_bearish,g_fibo_origin_bear_time,g_pending_bear_zone_idx))
-         {g_fibo_bear_pending=false;g_pending_bear_zone_idx=-1;}
-   CheckMitigation(shift);
-}
 
-void ScanHistory(){
-   g_is_scanning_history=true;
-   int total=iBars(Symbol(),Period());
-   int start=MathMin(InpHistoryBars+InpPivotLB*2+InpOriginLookback,total-2);
-   for(int i=start;i>=1;i--) ProcessBar(i);
-   g_is_scanning_history=false;
-}
 
-void DeleteAllSnDObjects(){
-   for(int i=ObjectsTotal()-1;i>=0;i--){string n=ObjectName(i);if(StringFind(n,"SnD_")==0) ObjectDelete(n);}
-}
 
-//=====================================================================
-// [6.1] MOMENTUM INDICATOR (MQL4 - no handle needed)
-//=====================================================================
-void DrawMomentumArrow(bool isBullish,int index){
-   datetime t=iTime(Symbol(),Period(),index);
-   double high=iHigh(Symbol(),Period(),index);
-   double low=iLow(Symbol(),Period(),index);
-   double range=high-low;
-   string objName=(isBullish?"MomUp_":"MomDn_")+TimeToString(t);
-   double price=isBullish?(low-(range*0.2)):(high+(range*0.2));
-   if(ObjectFind(objName)>=0){ObjectMove(objName,0,t,price);return;}
-   if(isBullish){
-      ObjectCreate(objName,OBJ_ARROW_UP,0,t,price);
-      ObjectSet(objName,OBJPROP_COLOR,clrDodgerBlue);
-      ObjectSet(objName,OBJPROP_WIDTH,1);
-      ObjectSet(objName,OBJPROP_BACK,true);
-   } else {
-      ObjectCreate(objName,OBJ_ARROW_DOWN,0,t,price);
-      ObjectSet(objName,OBJPROP_COLOR,clrCrimson);
-      ObjectSet(objName,OBJPROP_WIDTH,1);
-      ObjectSet(objName,OBJPROP_BACK,true);
-   }
-}
-
-bool IsBullishMomentum(int index=1){
-   double atr=iATR(Symbol(),Period(),InpATRPeriod,index);
-   double high=iHigh(Symbol(),Period(),index);
-   double low=iLow(Symbol(),Period(),index);
-   double open=iOpen(Symbol(),Period(),index);
-   double close=iClose(Symbol(),Period(),index);
-   double totalLen=high-low; if(totalLen<=0) return false;
-   if(totalLen<=atr*InpATRMultiplier) return false;
-   if(close<=open) return false;
-   if((close-open)<totalLen*InpBodyPercentage) return false;
-   if((open-low)>totalLen*InpWickPercentage) return false;
-   return true;
-}
-
-bool IsBearishMomentum(int index=1){
-   double atr=iATR(Symbol(),Period(),InpATRPeriod,index);
-   double high=iHigh(Symbol(),Period(),index);
-   double low=iLow(Symbol(),Period(),index);
-   double open=iOpen(Symbol(),Period(),index);
-   double close=iClose(Symbol(),Period(),index);
-   double totalLen=high-low; if(totalLen<=0) return false;
-   if(totalLen<=atr*InpATRMultiplier) return false;
-   if(open<=close) return false;
-   if((open-close)<totalLen*InpBodyPercentage) return false;
-   if((high-open)>totalLen*InpWickPercentage) return false;
-   return true;
-}
-
-void ScanHistoricalMomentum(){
-   int total=iBars(Symbol(),Period());
-   int start=MathMin(InpHistoryBars,total-2);
-   for(int i=start;i>=1;i--){
-      if(IsBullishMomentum(i)) DrawMomentumArrow(true,i);
-      else if(IsBearishMomentum(i)) DrawMomentumArrow(false,i);
-   }
-}
-
-void ExecuteMomentumAutoTrade(bool isBullish,int shift){
-   if(!InpEnableAutoMomentum) return;
-   int digits=(int)SymbolInfoInteger(Symbol(),SYMBOL_DIGITS);
-   double pt=SymbolInfoDouble(Symbol(),SYMBOL_POINT);
-   double high=iHigh(Symbol(),Period(),shift);
-   double low=iLow(Symbol(),Period(),shift);
-   double stopLoss=isBullish?NormalizeDouble(low-InpBufferPoints*pt,digits):NormalizeDouble(high+InpBufferPoints*pt,digits);
-   RefreshRates();
-   double entry=isBullish?Ask:Bid;
-   if(isBullish&&stopLoss>=entry){Print("AutoMomentum: SL BUY invalid");return;}
-   if(!isBullish&&stopLoss<=entry){Print("AutoMomentum: SL SELL invalid");return;}
-   double riskAmount=ExtPanel.AdjRisk();
-   if(riskAmount<=0){Print("AutoMomentum: Risk<=0");return;}
-   double lot=CalcLotSize(riskAmount,entry,stopLoss,Symbol());
-   if(lot<=0){Print("AutoMomentum: Lot invalid (",lot,")");return;}
-   double mult=StringToDouble(ExtPanel.m_edt_ratio.Text()); if(mult<=0) mult=2.0;
-   double diff=MathAbs(entry-stopLoss);
-   double tp=isBullish?NormalizeDouble(entry+diff*mult,digits):NormalizeDouble(entry-diff*mult,digits);
-   double hardSL=stopLoss;
-   string comm="MOM_AUTO";
-   if(ExtPanel.m_cl_active){comm="RP_CL_"+DoubleToString(stopLoss,digits);hardSL=isBullish?NormalizeDouble(entry-diff*2.0,digits):NormalizeDouble(entry+diff*2.0,digits);}
-   bool result=isBullish?ExtTrade.Buy(lot,Symbol(),entry,hardSL,tp,comm):ExtTrade.Sell(lot,Symbol(),entry,hardSL,tp,comm);
-   string dir=isBullish?"BUY":"SELL";
-   if(result){Print("AutoMomentum Executed: ",dir," Lot:",lot," SL:",stopLoss," TP:",tp);ExtPanel.SetStatus("Auto Mom "+dir+" | Lot:"+DoubleToString(lot,2));}
-   else{Print("AutoMomentum FAILED ",dir," Error:",GetLastError());ExtPanel.SetStatus("AutoMom Gagal: Err "+IntegerToString(GetLastError()));}
-}
-
-//=====================================================================
-// [7] EVENT HANDLERS
-//=====================================================================
-bool g_resync_done=false;
-
-int OnInit(){
-   ChartSetInteger(0,CHART_FOREGROUND,false);
-   if(!ExtPanel.Create(0,"AutoSnD - Risk Panel",0,20,30,305,520)) return INIT_FAILED;
-   ExtPanel.Run();
-   ScanHistory();
-   ScanHistoricalMomentum();
-   g_last_processed_bar=iTime(Symbol(),Period(),0);
-   Print("AutoSnD EA MT4 v3.00 Ready. Trading:",(InpEnableAutoSnD?"ON":"OFF"));
-   return INIT_SUCCEEDED;
-}
-
-void OnDeinit(const int reason){
-   DeleteAllSnDObjects();
-   for(int i=ObjectsTotal()-1;i>=0;i--){
-      string n=ObjectName(i);
-      if(StringFind(n,"MomUp_")==0||StringFind(n,"MomDn_")==0) ObjectDelete(n);
-   }
-   ExtPanel.Destroy(reason);
-}
-
-void OnTick(){
-   if(!g_resync_done){InitialHistorySync();g_resync_done=true;}
-   PollTradeEvents();
-   ExtPanel.UpdateStats();
-   CheckCutLoss();
-   CheckAutoCloseFriday();
-   UpdateZoneLabelsTime(TimeCurrent());
-   datetime currentBarTime=iTime(Symbol(),Period(),0);
-   ExtPanel.UpdateClock(currentBarTime);
-   if(currentBarTime!=g_last_processed_bar){
-      ProcessBar(1);
-      bool isBullMom=IsBullishMomentum(1);
-      bool isBearMom=IsBearishMomentum(1);
-      if(isBullMom)     {DrawMomentumArrow(true, 1);ExecuteMomentumAutoTrade(true, 1);}
-      else if(isBearMom){DrawMomentumArrow(false,1);ExecuteMomentumAutoTrade(false,1);}
-      g_last_processed_bar=currentBarTime;
-   }
-   // Early Signal (N detik sebelum close candle)
-   if(InpEarlySignalSeconds>0){
-      int sec_left=(int)(currentBarTime+Period()*60-TimeCurrent());
-      if(sec_left>0&&sec_left<=InpEarlySignalSeconds){
-         if(IsBullishMomentum(0)) DrawMomentumArrow(true,0);
-         else if(IsBearishMomentum(0)) DrawMomentumArrow(false,0);
-         else{
-            ObjectDelete("MomUp_"+TimeToString(currentBarTime));
-            ObjectDelete("MomDn_"+TimeToString(currentBarTime));
-         }
-      }
-   }
-}
-
-void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
-   {ExtPanel.ChartEvent(id,lp,dp,sp);}
-//+------------------------------------------------------------------+
 
 
 
