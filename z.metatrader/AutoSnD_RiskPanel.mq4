@@ -953,8 +953,8 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL=0){
    }
 
    bool result=isBullish
-               ? ExtTrade.Buy (lot,Symbol(),entry,hardSL,tp,0,0,comm)
-               : ExtTrade.Sell(lot,Symbol(),entry,hardSL,tp,0,0,comm);
+               ? ExtTrade.Buy (lot,Symbol(),entry,hardSL,tp,comm)
+               : ExtTrade.Sell(lot,Symbol(),entry,hardSL,tp,comm);
 
    if(result) Print("MomentumAutoTrade: ",(isBullish?"BUY":"SELL")," Entry:",entry," SL:",hardSL," TP:",tp);
 }
