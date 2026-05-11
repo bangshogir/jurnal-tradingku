@@ -723,7 +723,7 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
    
    string uid=NextID(), rname="SnD_Z_"+uid;
    if(show_visual){
-      if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
+      if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,TimeCurrent() + 315360000,btm))
         {ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use);ObjectSetInteger(0,rname,OBJPROP_FILL,true);ObjectSetInteger(0,rname,OBJPROP_BACK,true);ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits));}
       
       // Single centered label: "top / btm" (same as MT5)
