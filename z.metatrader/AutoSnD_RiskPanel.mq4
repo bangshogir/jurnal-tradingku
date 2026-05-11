@@ -716,23 +716,41 @@ void PollTradeEvents(){
 //=====================================================================
 void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_ZONE_TYPE ztype = ZONE_RBD_DBR, datetime end_time = 0){
    if(g_zone_count>=MAX_ZONES) return;
-   if(end_time == 0) end_time = start_time;
-   color col_use=(ztype == ZONE_RBR_DBD) ? InpContColor : (is_demand?InpDemandColor:InpSupplyColor);
-   string uid=NextID(),rname="SnD_Z_"+uid,lname="SnD_ZL_"+uid;
-   if(InpShowZones)
-     {
+   
+   bool show_visual = (ztype == ZONE_RBD_DBR) ? InpShowRbdDbr : InpShowRbrDbd;
+   color col_use = (ztype == ZONE_RBD_DBR) ? (is_demand?InpDemandColor:InpSupplyColor) : InpContColor;
+   string stype = (ztype == ZONE_RBD_DBR) ? (is_demand?"Origin Demand":"Origin Supply") : (is_demand?"Demand (RBR)":"Supply (DBD)");
+   
+   string uid=NextID(), rname="SnD_Z_"+uid;
+   if(show_visual){
       if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,D'2099.12.31',btm))
-        { ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,rname,OBJPROP_FILL,true); ObjectSetInteger(0,rname,OBJPROP_BACK,true); ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false); ObjectSetString(0,rname,OBJPROP_TOOLTIP,(is_demand?"Demand":"Supply")+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits)); }
-      if(ObjectCreate(0,lname,OBJ_TEXT,0,start_time,top))
-        { ObjectSetString(0,lname,OBJPROP_TEXT,is_demand?" Origin Demand":" Origin Supply"); ObjectSetInteger(0,lname,OBJPROP_COLOR,col_use); ObjectSetInteger(0,lname,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,lname,OBJPROP_ANCHOR,ANCHOR_CENTER); ObjectSetInteger(0,lname,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,lname,OBJPROP_BACK,true); }
-      string ptop="SnD_PT_"+uid, pbtm="SnD_PB_"+uid;
-      if(ObjectCreate(0,ptop,OBJ_TEXT,0,start_time,top)) { ObjectSetString(0,ptop,OBJPROP_TEXT,DoubleToString(top,_Digits)); ObjectSetInteger(0,ptop,OBJPROP_COLOR,col_use); ObjectSetInteger(0,ptop,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,ptop,OBJPROP_ANCHOR,ANCHOR_LOWER); ObjectSetInteger(0,ptop,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,ptop,OBJPROP_BACK,true); }
-      if(ObjectCreate(0,pbtm,OBJ_TEXT,0,start_time,btm)) { ObjectSetString(0,pbtm,OBJPROP_TEXT,DoubleToString(btm,_Digits)); ObjectSetInteger(0,pbtm,OBJPROP_COLOR,col_use); ObjectSetInteger(0,pbtm,OBJPROP_FONTSIZE,6); ObjectSetInteger(0,pbtm,OBJPROP_ANCHOR,ANCHOR_UPPER); ObjectSetInteger(0,pbtm,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,pbtm,OBJPROP_BACK,true); }
-     }
-   g_zones[g_zone_count].rect_name=rname; g_zones[g_zone_count].lbl_name=lname; g_zones[g_zone_count].lbl_top="SnD_PT_"+uid; g_zones[g_zone_count].lbl_btm="SnD_PB_"+uid;
-   g_zones[g_zone_count].is_demand=is_demand;g_zones[g_zone_count].top=top;g_zones[g_zone_count].btm=btm;g_zones[g_zone_count].start_time=start_time;
-   g_zones[g_zone_count].end_time=end_time; g_zones[g_zone_count].type=ztype;
-   g_zones[g_zone_count].active=true; g_zone_count++;
+        {ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use);ObjectSetInteger(0,rname,OBJPROP_FILL,true);ObjectSetInteger(0,rname,OBJPROP_BACK,true);ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits));}
+      
+      // Single centered label: "top / btm" (same as MT5)
+      double center_price = top - ((top - btm) / 2.0);
+      datetime right_edge = TimeCurrent();
+      datetime mid_time = (datetime)(((long)start_time + (long)right_edge) / 2);
+      string pinfo = "SnD_PI_"+uid;
+      string price_txt = DoubleToString(top,_Digits) + " / " + DoubleToString(btm,_Digits);
+      if(ObjectCreate(0,pinfo,OBJ_TEXT,0,mid_time,center_price))
+        {ObjectSetString(0,pinfo,OBJPROP_TEXT,price_txt);ObjectSetInteger(0,pinfo,OBJPROP_COLOR,clrBlack);ObjectSetInteger(0,pinfo,OBJPROP_FONTSIZE,6);ObjectSetInteger(0,pinfo,OBJPROP_ANCHOR,ANCHOR_CENTER);ObjectSetInteger(0,pinfo,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,pinfo,OBJPROP_BACK,false);}
+      
+      g_zones[g_zone_count].lbl_top = pinfo;
+   } else {
+      g_zones[g_zone_count].lbl_top = "";
+   }
+   
+   g_zones[g_zone_count].rect_name = rname;
+   g_zones[g_zone_count].lbl_name  = "";
+   g_zones[g_zone_count].lbl_btm   = "";
+   g_zones[g_zone_count].is_demand  = is_demand;
+   g_zones[g_zone_count].top        = top;
+   g_zones[g_zone_count].btm        = btm;
+   g_zones[g_zone_count].start_time = start_time;
+   g_zones[g_zone_count].end_time   = (end_time > 0) ? end_time : start_time;
+   g_zones[g_zone_count].type       = ztype;
+   g_zones[g_zone_count].active     = true;
+   g_zone_count++;
 }
 
 
@@ -747,18 +765,23 @@ void DrawBOS(bool is_bull,double price,datetime x1,datetime x2){
 
 void MitigateZone(int idx,datetime t){
    g_zones[idx].active=false;
-   ObjectDelete(0,g_zones[idx].lbl_name);ObjectDelete(0,g_zones[idx].lbl_top);ObjectDelete(0,g_zones[idx].lbl_btm);
-   if(InpShowMitigated){ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false);}
-   else ObjectDelete(0,g_zones[idx].rect_name);
+   // Delete the single combined price label
+   ObjectDelete(0,g_zones[idx].lbl_top);
+   if(InpShowMitigated){
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);
+      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false);
+   } else ObjectDelete(0,g_zones[idx].rect_name);
 }
 
 void UpdateZoneLabelsTime(datetime t){
-   for(int i=0;i<g_zone_count;i++) if(g_zones[i].active){
-      datetime mid=(datetime)(((long)g_zones[i].start_time+(long)t)/2);
-      ObjectMove(0,g_zones[i].lbl_name,0,mid,(g_zones[i].top+g_zones[i].btm)/2.0);
-      ObjectMove(0,g_zones[i].lbl_top,0,mid,g_zones[i].top);
-      ObjectMove(0,g_zones[i].lbl_btm,0,mid,g_zones[i].btm);
-   }
+   // Move single centered price label to stay in the middle of the active zone (MT5-identical)
+   for(int i=0;i<g_zone_count;i++)
+      if(g_zones[i].active && g_zones[i].lbl_top != ""){
+         datetime mid=(datetime)(((long)g_zones[i].start_time+(long)t)/2);
+         double center_price = g_zones[i].top - ((g_zones[i].top - g_zones[i].btm) / 2.0);
+         ObjectMove(0,g_zones[i].lbl_top,0,mid,center_price);
+      }
 }
 
 double GetPivotHigh(int lb,int shift){
