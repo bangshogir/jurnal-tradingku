@@ -723,8 +723,14 @@ void DrawZone(bool is_demand, double top, double btm, datetime start_time, ENUM_
    
    string uid=NextID(), rname="SnD_Z_"+uid;
    if(show_visual){
-      if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,TimeCurrent() + 315360000,btm))
-        {ObjectSetInteger(0,rname,OBJPROP_COLOR,col_use);ObjectSetInteger(0,rname,OBJPROP_FILL,true);ObjectSetInteger(0,rname,OBJPROP_BACK,true);ObjectSetInteger(0,rname,OBJPROP_SELECTABLE,false);ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits));}
+      datetime draw_end = (end_time > 0 && end_time != start_time) ? end_time : D'2030.12.31';
+      if(ObjectCreate(0,rname,OBJ_RECTANGLE,0,start_time,top,draw_end,btm))
+        {
+         ObjectSet(rname,OBJPROP_COLOR,col_use);
+         ObjectSet(rname,OBJPROP_BACK,true);
+         ObjectSet(rname,OBJPROP_STYLE,STYLE_SOLID);
+         ObjectSetString(0,rname,OBJPROP_TOOLTIP,stype+" | Top:"+DoubleToString(top,_Digits)+" Btm:"+DoubleToString(btm,_Digits));
+        }
       
       // Single centered label: "top / btm" (same as MT5)
       double center_price = top - ((top - btm) / 2.0);
@@ -768,9 +774,9 @@ void MitigateZone(int idx,datetime t){
    // Delete the single combined price label
    ObjectDelete(0,g_zones[idx].lbl_top);
    if(InpShowMitigated){
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_COLOR,InpMitColor);
-      ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_FILL,false);
+      ObjectSet(g_zones[idx].rect_name, OBJPROP_TIME2, (double)t);
+      ObjectSet(g_zones[idx].rect_name, OBJPROP_COLOR, InpMitColor);
+      ObjectSet(g_zones[idx].rect_name, OBJPROP_BACK, false);
    } else ObjectDelete(0,g_zones[idx].rect_name);
 }
 
