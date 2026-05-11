@@ -33,6 +33,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
     Route::post('/profile/telegram', [DashboardController::class, 'updateTelegram'])->name('profile.telegram');
     Route::delete('/trades/{id}/dismiss', [DashboardController::class, 'dismissTrade'])->name('trades.dismiss');
+    // Documentation
+    Route::get('/panduan', function () {
+        return view('docs.index');
+    })->name('docs.index');
 
     // Telegram Routing endpoints
     Route::post('/telegram-routings', [TelegramRoutingController::class, 'store'])->name('telegram-routings.store');
