@@ -773,8 +773,35 @@ double GetPivotLow(int lb,int shift){
    for(int i=shift;i<=shift+2*lb;i++){if(i==shift+lb) continue;if(iLow(Symbol(),Period(),i)<=c) return 0;}
    return c;
 }
-int FindDemandBase(int shift){for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)<iOpen(Symbol(),Period(),i)) return i;return -1;}
-int FindSupplyBase(int shift){for(int i=shift+1;i<=shift+InpOriginLookback;i++) if(iClose(Symbol(),Period(),i)>iOpen(Symbol(),Period(),i)) return i;return -1;}
+// MT5-identical: FindDemandBase cari bearish candle dekat Pivot Low (DBR base)
+// Returns bar index, outputs top=Open, btm=Low (SMC style)
+int FindDemandBase(datetime pivot_time, double &top, double &btm) {
+   int pi = iBarShift(Symbol(), Period(), pivot_time);
+   if(pi < 0) return -1;
+   for(int i = pi; i <= pi + 5; i++) {
+      if(iClose(Symbol(), Period(), i) < iOpen(Symbol(), Period(), i)) {
+         top = iOpen(Symbol(), Period(), i); // Open dari candle bearish
+         btm = iLow(Symbol(), Period(), i);  // Low
+         return i;
+      }
+   }
+   return -1;
+}
+
+// MT5-identical: FindSupplyBase cari bullish candle dekat Pivot High (RBD base)
+// Returns bar index, outputs top=High, btm=Open (SMC style)
+int FindSupplyBase(datetime pivot_time, double &top, double &btm) {
+   int pi = iBarShift(Symbol(), Period(), pivot_time);
+   if(pi < 0) return -1;
+   for(int i = pi; i <= pi + 5; i++) {
+      if(iClose(Symbol(), Period(), i) > iOpen(Symbol(), Period(), i)) {
+         top = iHigh(Symbol(), Period(), i); // High
+         btm = iOpen(Symbol(), Period(), i); // Open dari candle bullish
+         return i;
+      }
+   }
+   return -1;
+}
 
 void CheckMitigation(int shift){
    double l=iLow(Symbol(),Period(),shift),h=iHigh(Symbol(),Period(),shift);
@@ -820,22 +847,25 @@ void ProcessBar(int shift){
    double cls=iClose(Symbol(),Period(),shift);
    bool bull_bos=g_last_ph>0&&cls>g_last_ph&&g_last_ph_time!=g_marked_ph_time;
    bool bear_bos=g_last_pl>0&&cls<g_last_pl&&g_last_pl_time!=g_marked_pl_time;
+   
    if(bull_bos){
       g_marked_ph_time=g_last_ph_time;
       DrawBOS(true,g_last_ph,g_last_ph_time,iTime(Symbol(),Period(),shift));
       
-      int base=FindDemandBase(shift);
-      if(base!=-1){
-         DrawZone(true,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+      if(InpShowRbdDbr){
+         double top=-1, btm=-1;
+         int base=FindDemandBase(g_last_pl_time, top, btm);
+         if(base!=-1) DrawZone(true, top, btm, iTime(Symbol(),Period(),base));
       }
    }
    if(bear_bos){
       g_marked_pl_time=g_last_pl_time;
       DrawBOS(false,g_last_pl,g_last_pl_time,iTime(Symbol(),Period(),shift));
       
-      int base=FindSupplyBase(shift);
-      if(base!=-1){
-         DrawZone(false,iHigh(Symbol(),Period(),base),iLow(Symbol(),Period(),base),iTime(Symbol(),Period(),base));
+      if(InpShowRbdDbr){
+         double top=-1, btm=-1;
+         int base=FindSupplyBase(g_last_ph_time, top, btm);
+         if(base!=-1) DrawZone(false, top, btm, iTime(Symbol(),Period(),base));
       }
    }
    CheckContinuationZone(shift);
