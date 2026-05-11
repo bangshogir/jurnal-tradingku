@@ -169,17 +169,22 @@ class TradingWebhookController extends Controller
             if (array_key_exists('magic_number', $validated)) $log->magic_number = $validated['magic_number'];
             if (array_key_exists('comment', $validated)) $log->comment = $validated['comment'];
 
-            // Derive strategy from the comment field
+            // Derive strategy from the comment field.
+            // IMPORTANT: On deal_close, MT5 brokers overwrite the comment with "sl", "tp", "[sl]", etc.
+            // We must NOT let a close event downgrade a previously-set "Auto Momentum" strategy to "Manual".
+            // Rule: Only write strategy when the record is NEW, OR when MOM_AUTO tag is explicitly present.
             $rawComment = $validated['comment'] ?? '';
-            
-            // MOM_AUTO tag is always embedded in the comment for auto momentum trades.
-            // Manual trades may have RP_CL_ but will NOT have MOM_AUTO.
+            $isNewRecord = !$log->exists; // true if this is the first time we're saving this ticket
+
             if (str_contains($rawComment, 'MOM_AUTO')) {
+                // Explicit Auto Momentum tag — always set (open or close)
                 $log->strategy = 'Auto Momentum';
-            } else {
+            } elseif ($isNewRecord) {
+                // New record with no MOM_AUTO tag → default to Manual
                 $log->strategy = 'Manual';
             }
-            
+            // else: existing record (e.g. deal_close with "sl"/"tp" comment) → preserve whatever strategy was stored
+
             // Extract timeframe from the comment bracket e.g. MOM_AUTO[M15] or MOM_AUTO|RP_CL_1.23[M15]
             if (preg_match('/\[([A-Z0-9]+)\]/', $rawComment, $matches)) {
                 $log->timeframe = $matches[1];
