@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                        AutoSnD_RiskPanel.mq5     |
 //|         Supply Demand + Fibo Auto Trading dengan Risk Panel      |
 //|                                    Copyright 2026, Antigravity   |
@@ -69,6 +69,11 @@ input bool   InpEnableProfitProtect = false; // Enable Step Profit Protection
 input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry (Breakeven) saat profit mencapai X% dari TP
 input double InpStep2Pct = 90.0;             // Step 2: Pindah SL ke 50% profit saat mencapai X% dari TP
 
+input group "=== Drawdown Protection ==="
+input bool   InpEnableDailyLossLimit  = false; // Enable Daily Loss Limit
+input double InpMaxDailyLoss          = 50.0;  // Max Daily Loss (amount in account currency)
+input bool   InpBlockManualOnLimit    = false;  // Also block manual Risk Panel trades when limit reached
+
 
 //=====================================================================
 // ZONE STRUCT & GLOBALS (copied from SnD_Zone.mq5)
@@ -110,6 +115,10 @@ datetime g_last_processed_bar = 0;
 
 
 bool     g_is_scanning_history = false; // Prevents auto trades from firing during history scan
+
+// === Daily Loss Limit State ===
+bool     g_daily_limit_reached = false;  // Cached flag: true when daily loss >= InpMaxDailyLoss
+datetime g_daily_limit_day     = 0;      // Broker day when limit was last recalculated
 
 int      g_atr_handle = INVALID_HANDLE; // Handle untuk indikator ATR
 
@@ -270,6 +279,85 @@ void CheckAutoCloseFriday()
   }
 
 //=====================================================================
+// [3b] DAILY LOSS LIMIT (Drawdown Protection)
+//=====================================================================
+
+// Returns total closed P&L for today (deals closed today) + floating P&L from open positions
+double GetDailyPnL()
+  {
+   MqlDateTime now;
+   TimeCurrent(now);
+   // Build start-of-today timestamp (00:00:00 broker time)
+   MqlDateTime dayStart; dayStart.year=now.year; dayStart.mon=now.mon; dayStart.day=now.day;
+   dayStart.hour=0; dayStart.min=0; dayStart.sec=0; dayStart.day_of_week=0; dayStart.day_of_year=0;
+   datetime todayMidnight = StructToTime(dayStart);
+
+   double pnl = 0.0;
+
+   // Sum all closed deals from today
+   if(HistorySelect(todayMidnight, TimeCurrent()))
+     {
+      int deals = HistoryDealsTotal();
+      for(int i = 0; i < deals; i++)
+        {
+         ulong dTicket = HistoryDealGetTicket(i);
+         if(dTicket == 0) continue;
+         long dEntry = HistoryDealGetInteger(dTicket, DEAL_ENTRY);
+         if(dEntry != DEAL_ENTRY_OUT && dEntry != DEAL_ENTRY_INOUT) continue; // Only closing deals
+         long dType = HistoryDealGetInteger(dTicket, DEAL_TYPE);
+         if(dType == DEAL_TYPE_BALANCE) continue; // Skip deposits/withdrawals
+         pnl += HistoryDealGetDouble(dTicket, DEAL_PROFIT)
+              + HistoryDealGetDouble(dTicket, DEAL_SWAP)
+              + HistoryDealGetDouble(dTicket, DEAL_COMMISSION);
+        }
+     }
+
+   // Add floating P&L from currently open positions
+   int posTotal = PositionsTotal();
+   for(int i = 0; i < posTotal; i++)
+     {
+      ulong posTicket = PositionGetTicket(i);
+      if(posTicket == 0) continue;
+      pnl += PositionGetDouble(POSITION_PROFIT)
+           + PositionGetDouble(POSITION_SWAP);
+     }
+
+   return pnl;
+  }
+
+// Returns true if daily loss has reached or exceeded the configured limit
+bool IsDailyLossLimitReached()
+  {
+   if(!InpEnableDailyLossLimit) return false;
+
+   // Re-check once per bar (or if day changed) to avoid heavy looping every tick
+   MqlDateTime now; TimeCurrent(now);
+   datetime todayKey = (datetime)(now.year * 10000 + now.mon * 100 + now.day); // compact day ID
+
+   if(g_daily_limit_day != todayKey)
+     {
+      // New day → reset limit flag
+      g_daily_limit_reached = false;
+      g_daily_limit_day     = todayKey;
+     }
+
+   // Only do the full scan if not yet reached (saves CPU once locked)
+   if(!g_daily_limit_reached)
+     {
+      double dailyPnL = GetDailyPnL();
+      if(dailyPnL <= -MathAbs(InpMaxDailyLoss))
+        {
+         g_daily_limit_reached = true;
+         Print(">>> DAILY LOSS LIMIT REACHED! Daily P&L: ", DoubleToString(dailyPnL, 2),
+               " | Limit: -", DoubleToString(InpMaxDailyLoss, 2),
+               " | Auto Trading PAUSED until tomorrow.");
+        }
+     }
+
+   return g_daily_limit_reached;
+  }
+
+//=====================================================================
 // [4] RISK PANEL CLASS
 //=====================================================================
 class CRiskPanel : public CAppDialog
@@ -383,6 +471,9 @@ public:
    }
    
    void      ExecuteMarketOrder(bool is_buy) {
+      // *** DRAWDOWN PROTECTION: Block manual order if InpBlockManualOnLimit is true ***
+      if(InpBlockManualOnLimit && IsDailyLossLimitReached())
+        { SetStatus("Daily Loss Limit Reached!"); return; }
       double risk = StringToDouble(m_edt_risk.Text()); double sl = StringToDouble(m_edt_sl.Text());
       if(risk <= 0 || sl <= 0) { SetStatus("Isi Risk & SL"); return; }
       double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
@@ -925,6 +1016,13 @@ bool IsMomentumAfterBase(bool isBullish, int shift, double &out_sl_level) {
 void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL = 0)
   {
    if(!InpEnableAutoMomentum) return;
+
+   // *** DRAWDOWN PROTECTION: Block auto trading if daily loss limit is reached ***
+   if(IsDailyLossLimitReached())
+     {
+      ExtPanel.SetStatus("Daily Loss Limit! Auto paused.");
+      return;
+     }
    
    int    digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    double pt     = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
@@ -1263,6 +1361,10 @@ void OnTick()
    CheckCutLoss();
    CheckProfitProtection();
    CheckAutoCloseFriday();
+
+   // Show daily loss limit warning on panel every tick when active
+   if(InpEnableDailyLossLimit && IsDailyLossLimitReached())
+      ExtPanel.SetStatus("Daily Limit! Auto paused.");
    
    // Selalu update label text agar dinamis terus berada di TENGAH kotak
    UpdateZoneLabelsTime(TimeCurrent());
