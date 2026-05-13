@@ -70,9 +70,10 @@ input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry (Brea
 input double InpStep2Pct = 90.0;             // Step 2: Pindah SL ke 50% profit saat mencapai X% dari TP
 
 input group "=== Drawdown Protection ==="
-input bool   InpEnableDailyLossLimit  = false; // Enable Daily Loss Limit
-input double InpMaxDailyLoss          = 50.0;  // Max Daily Loss (amount in account currency)
-input bool   InpBlockManualOnLimit    = false;  // Also block manual Risk Panel trades when limit reached
+input bool   InpEnableDailyLossLimit  = false; // Enable Daily Loss Limit (Aktifkan pembatasan loss harian)
+input double InpMaxDailyLoss          = 500.0; // Max Daily Loss dalam mata uang AKUN (bukan real $). Akun Cent: 500 = 5 USD real | Akun Real: 500 = 500 USD
+input bool   InpBlockManualOnLimit    = false;  // Blokir tombol manual Buy/Sell saat limit harian tercapai
+
 
 
 //=====================================================================
