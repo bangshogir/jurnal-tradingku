@@ -66,8 +66,9 @@ input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 input int    InpMomMaxCandlesAfterBase = 2;  // Maks jarak candle dari Base ke Momentum (untuk auto order)
 
 input group "=== Profit Protection (Step Trailing SL) ==="
-input bool   InpEnableProfitProtect = false; // Enable Step Profit Protection
-input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry (Breakeven) saat profit mencapai X% dari TP
+input bool   InpEnableProfitProtectStep1 = false; // Enable Step 1 (Breakeven)
+input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry saat profit mencapai X% dari TP
+input bool   InpEnableProfitProtectStep2 = false; // Enable Step 2 (Trailing)
 input double InpStep2Pct = 90.0;             // Step 2: Pindah SL ke 50% profit saat mencapai X% dari TP
 
 input group "=== Drawdown Protection ==="
@@ -191,7 +192,7 @@ void CheckCutLoss()
 //---------------------------------------------------------------------
 void CheckProfitProtection()
   {
-   if(!InpEnableProfitProtect) return;
+   if(!InpEnableProfitProtectStep1 && !InpEnableProfitProtectStep2) return;
    int    digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    int    total  = PositionsTotal();
    for(int i = total - 1; i >= 0; i--)
@@ -210,13 +211,14 @@ void CheckProfitProtection()
       double progress = isBuy ? (curPrice - entry) / tpDist * 100.0 : (entry - curPrice) / tpDist * 100.0;
       if(progress <= 0) continue;
       double newSL = sl;
-      if(progress >= InpStep2Pct)
+      
+      if(InpEnableProfitProtectStep2 && progress >= InpStep2Pct)
         {
          double targetSL = isBuy ? NormalizeDouble(entry + tpDist * 0.5, digits) : NormalizeDouble(entry - tpDist * 0.5, digits);
          if(isBuy  && targetSL > newSL) newSL = targetSL;
          if(!isBuy && (newSL == 0 || targetSL < newSL)) newSL = targetSL;
         }
-      else if(progress >= InpStep1Pct)
+      else if(InpEnableProfitProtectStep1 && progress >= InpStep1Pct)
         {
          double targetSL = NormalizeDouble(entry, digits);
          if(isBuy  && targetSL > newSL) newSL = targetSL;
