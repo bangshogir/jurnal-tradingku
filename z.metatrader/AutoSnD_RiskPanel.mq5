@@ -44,7 +44,8 @@ input int     InpHistoryBars    = 600;     // Jumlah Bar Histori Discan
 input bool   InpShowBOS        = true;    // Tampilkan Garis BOS di Chart
 input color  InpDemandColor    = C'0,160,0';   // Warna Zona Demand
 input color  InpSupplyColor    = C'190,0,0';   // Warna Zona Supply
-input bool   InpShowMitigated  = true;          // Tampilkan Zona Termitigasi
+input bool   InpShowMitigatedRBD_DBR = true;    // Tampilkan Zona Reversal Termitigasi
+input bool   InpShowMitigatedRBR_DBD = true;    // Tampilkan Zona Contin. Termitigasi
 input color  InpMitColor       = clrGray;       // Warna Border Zona Termitigasi
 input bool   InpShowRbdDbr     = true;          // Tampilkan Zona Reversal (RBD/DBR)
 input bool   InpShowRbrDbd     = true;          // Tampilkan Zona Continuation (RBR/DBD)
@@ -901,7 +902,8 @@ void MitigateZone(int idx, datetime t)
    ObjectDelete(0,g_zones[idx].lbl_top); 
    ObjectDelete(0,g_zones[idx].lbl_btm);
    
-   if(InpShowMitigated)
+   bool show_mitigated = (g_zones[idx].type == ZONE_RBD_DBR) ? InpShowMitigatedRBD_DBR : InpShowMitigatedRBR_DBD;
+   if(show_mitigated)
      {
       // Cap the rectangle at the mitigation time
       ObjectSetInteger(0,g_zones[idx].rect_name,OBJPROP_TIME,1,t);
