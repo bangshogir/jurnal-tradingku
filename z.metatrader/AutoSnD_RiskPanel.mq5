@@ -69,6 +69,7 @@ input group "=== Trend Filter (EMA) ==="
 input bool               InpEnableTrendFilter = true; // Enable Trend Filter (EMA) untuk Momentum
 input int                InpTrendMAPeriod     = 200;  // MA Period
 input ENUM_MA_METHOD     InpTrendMAMethod     = MODE_EMA; // MA Method
+input bool               InpShowTrendMA       = true; // Tampilkan Garis MA di Chart
 
 input group "=== Profit Protection (Step Trailing SL) ==="
 input bool   InpEnableProfitProtectStep1 = false; // Enable Step 1 (Breakeven)
@@ -1352,6 +1353,7 @@ int OnInit()
      {
       g_ma_handle = iMA(_Symbol, _Period, InpTrendMAPeriod, 0, InpTrendMAMethod, PRICE_CLOSE);
       if(g_ma_handle == INVALID_HANDLE) { Print("Gagal inisialisasi MA untuk Trend Filter"); return INIT_FAILED; }
+      if(InpShowTrendMA) ChartIndicatorAdd(0, 0, g_ma_handle);
      }
    
    // Reset semua state zona agar tidak ada "hantu" dari timeframe sebelumnya
