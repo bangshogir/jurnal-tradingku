@@ -65,6 +65,11 @@ input int    InpATRPeriod      = 14;         // Periode ATR
 input double InpATRMultiplier  = 1.5;        // Min candle size vs ATR
 input int    InpMomMaxCandlesAfterBase = 2;  // Maks jarak candle dari Base ke Momentum (untuk auto order)
 
+input group "=== Trend Filter (EMA) ==="
+input bool               InpEnableTrendFilter = true; // Enable Trend Filter (EMA) untuk Momentum
+input int                InpTrendMAPeriod     = 200;  // MA Period
+input ENUM_MA_METHOD     InpTrendMAMethod     = MODE_EMA; // MA Method
+
 input group "=== Profit Protection (Step Trailing SL) ==="
 input bool   InpEnableProfitProtectStep1 = false; // Enable Step 1 (Breakeven)
 input double InpStep1Pct = 50.0;             // Step 1: Pindah SL ke Entry saat profit mencapai X% dari TP
@@ -124,6 +129,7 @@ bool     g_daily_limit_reached = false;  // Cached flag: true when daily loss >=
 datetime g_daily_limit_day     = 0;      // Broker day when limit was last recalculated
 
 int      g_atr_handle = INVALID_HANDLE; // Handle untuk indikator ATR
+int      g_ma_handle  = INVALID_HANDLE; // Handle untuk indikator MA (Trend Filter)
 
 // Array to prevent duplicate pending orders on the same zone
 datetime g_traded_zones[];
@@ -1028,6 +1034,18 @@ void ExecuteMomentumAutoTrade(bool isBullish, int shift, double customSL = 0)
       ExtPanel.SetStatus("Daily Loss Limit! Auto paused.");
       return;
      }
+
+   // *** TREND FILTER ***
+   if(InpEnableTrendFilter && g_ma_handle != INVALID_HANDLE)
+     {
+      double ma_val[1];
+      if(CopyBuffer(g_ma_handle, 0, shift, 1, ma_val) > 0)
+        {
+         double ref_price = iClose(_Symbol, _Period, shift); // Harga close dari candle Momentum
+         if(isBullish && ref_price < ma_val[0]) { Print("Momentum BUY di-blokir (Counter-Trend EMA ", InpTrendMAPeriod, ")"); return; }
+         if(!isBullish && ref_price > ma_val[0]) { Print("Momentum SELL di-blokir (Counter-Trend EMA ", InpTrendMAPeriod, ")"); return; }
+        }
+     }
    
    int    digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    double pt     = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
@@ -1330,6 +1348,12 @@ int OnInit()
    g_atr_handle = iATR(_Symbol, _Period, InpATRPeriod);
    if(g_atr_handle == INVALID_HANDLE) { Print("Gagal inisialisasi ATR untuk Momentum"); return INIT_FAILED; }
    
+   if(InpEnableTrendFilter)
+     {
+      g_ma_handle = iMA(_Symbol, _Period, InpTrendMAPeriod, 0, InpTrendMAMethod, PRICE_CLOSE);
+      if(g_ma_handle == INVALID_HANDLE) { Print("Gagal inisialisasi MA untuk Trend Filter"); return INIT_FAILED; }
+     }
+   
    // Reset semua state zona agar tidak ada "hantu" dari timeframe sebelumnya
    g_zone_count = 0;
    g_obj_id = 0;
@@ -1356,6 +1380,8 @@ void OnDeinit(const int reason)
       string n=ObjectName(0,i);
       if(StringFind(n,"MomUp_")==0 || StringFind(n,"MomDn_")==0) ObjectDelete(0,n);
    }
+   if(g_atr_handle != INVALID_HANDLE) IndicatorRelease(g_atr_handle);
+   if(g_ma_handle != INVALID_HANDLE) IndicatorRelease(g_ma_handle);
    ExtPanel.Destroy(reason);
   }
 
