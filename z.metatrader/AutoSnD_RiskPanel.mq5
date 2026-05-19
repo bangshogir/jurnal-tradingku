@@ -1473,21 +1473,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
   }
 
 void OnChartEvent(const int id, const long &lp, const double &dp, const string &sp)
-  { 
-   ExtPanel.ChartEvent(id, lp, dp, sp); 
-   
-   // --- PENYAPU LATAR BELAKANG ---
-   // Trik agar Panel selalu di depan: Lempar objek manual user (Trendline, Fibo, dsb) ke Background
-   if(id == CHARTEVENT_OBJECT_CREATE)
-     {
-      // Pastikan objek yang baru terbuat BUKAN bentukan EA (Panel, SnD Zone, atau Momentum Arrow)
-      if(StringFind(sp, "AutoSnD") < 0 && StringFind(sp, "SnD_") < 0 && StringFind(sp, "Mom") < 0)
-        {
-         ObjectSetInteger(0, sp, OBJPROP_BACK, true);
-         ChartRedraw();
-        }
-     }
-  }
+  { ExtPanel.ChartEvent(id, lp, dp, sp); }
 //+------------------------------------------------------------------+
 
 
